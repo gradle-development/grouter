@@ -1,6 +1,6 @@
 {
   "name": "vansai-app",
-  "version": "0.4.29",
+  "version": "0.4.31",
   "description": "VansAI web dashboard",
   "private": true,
   "scripts": {
