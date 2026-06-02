@@ -5,6 +5,10 @@
 import { checkFallbackError, formatRetryAfter } from "./accountFallback.js";
 import { unavailableResponse } from "../utils/error.js";
 
+export function stripComboPrefix(modelStr) {
+  return modelStr.startsWith("combo/") ? modelStr.slice(6) : modelStr;
+}
+
 /**
  * Track rotation state per combo (for round-robin strategy)
  * @type {Map<string, { index: number, consecutiveUseCount: number }>}
@@ -80,13 +84,13 @@ export function resetComboRotation(comboName) {
  * @returns {string[]|null} Array of models or null if not a combo
  */
 export function getComboModelsFromData(modelStr, combosData) {
-  // Don't check if it's in provider/model format
-  if (modelStr.includes("/")) return null;
+  const name = modelStr.startsWith("combo/") ? modelStr.slice(6) : modelStr;
+  if (name.includes("/")) return null;
   
   // Handle both array and object formats
   const combos = Array.isArray(combosData) ? combosData : (combosData?.combos || []);
   
-  const combo = combos.find(c => c.name === modelStr);
+  const combo = combos.find(c => c.name === name);
   if (combo && combo.models && combo.models.length > 0) {
     return combo.models;
   }

@@ -331,10 +331,11 @@ export function isProviderAllowed(apiKeyInfo, providerIdOrAlias) {
  */
 export function isComboAllowed(apiKeyInfo, comboName) {
   if (!apiKeyInfo) return true;
+  const name = comboName.startsWith("combo/") ? comboName.slice(6) : comboName;
   const allowed = apiKeyInfo.allowedCombos;
-  if (allowed === null || allowed === undefined) return true; // null = all
-  if (!Array.isArray(allowed) || allowed.length === 0) return false; // [] = none
-  return allowed.includes(comboName);
+  if (allowed === null || allowed === undefined) return true;
+  if (!Array.isArray(allowed) || allowed.length === 0) return false;
+  return allowed.includes(name);
 }
 
 /**

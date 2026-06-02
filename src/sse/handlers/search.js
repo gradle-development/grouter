@@ -12,7 +12,7 @@ import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig.js";
 import * as log from "../utils/logger.js";
 import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.js";
-import { handleComboChat, getComboModelsFromData } from "open-sse/services/combo.js";
+import { handleComboChat, getComboModelsFromData, stripComboPrefix } from "open-sse/services/combo.js";
 import { getSettings, getCombos } from "@/lib/localDb";
 import { AI_PROVIDERS, resolveProviderId } from "@/shared/constants/providers.js";
 import { isModelAllowed } from "../services/allowedModels.js";
@@ -85,17 +85,18 @@ export async function handleSearch(request) {
     if (!isComboAllowed(apiKeyInfo, providerInput)) {
       return errorResponse(HTTP_STATUS.FORBIDDEN, `Combo "${providerInput}" is not allowed for this API key`);
     }
+    const comboNameSearch = stripComboPrefix(providerInput);
     const comboStrategies = settings.comboStrategies || {};
-    const comboStrategy = comboStrategies[providerInput]?.fallbackStrategy || settings.comboStrategy || "fallback";
+    const comboStrategy = comboStrategies[comboNameSearch]?.fallbackStrategy || settings.comboStrategy || "fallback";
     const comboStickyLimit = settings.comboStickyRoundRobinLimit;
-    log.info("SEARCH", `Combo "${providerInput}" with ${comboModels.length} providers (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
+    log.info("SEARCH", `Combo "${comboNameSearch}" with ${comboModels.length} providers (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
     return handleComboChat({
 
       body,
       models: comboModels,
       handleSingleModel: (b, m) => handleSingleProviderSearch(b, m, request, apiKey, settings, apiKeyInfo),
       log,
-      comboName: providerInput,
+      comboName: comboNameSearch,
       comboStrategy,
       comboStickyLimit
     });

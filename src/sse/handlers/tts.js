@@ -11,7 +11,7 @@ import { handleTtsCore } from "open-sse/handlers/ttsCore.js";
 import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig.js";
 import { AI_PROVIDERS } from "@/shared/constants/providers";
-import { handleComboChat } from "open-sse/services/combo.js";
+import { handleComboChat, stripComboPrefix } from "open-sse/services/combo.js";
 import * as log from "../utils/logger.js";
 
 // Derived from providers.js: any TTS provider not noAuth requires stored credentials
@@ -54,17 +54,18 @@ export async function handleTts(request) {
     if (!isComboAllowed(apiKeyInfo, modelStr)) {
       return errorResponse(HTTP_STATUS.FORBIDDEN, `Combo "${modelStr}" is not allowed for this API key`);
     }
+    const comboNameTts = stripComboPrefix(modelStr);
     const comboStrategies = settings.comboStrategies || {};
-    const comboStrategy = comboStrategies[modelStr]?.fallbackStrategy || settings.comboStrategy || "fallback";
+    const comboStrategy = comboStrategies[comboNameTts]?.fallbackStrategy || settings.comboStrategy || "fallback";
     const comboStickyLimit = settings.comboStickyRoundRobinLimit;
-    log.info("TTS", `Combo "${modelStr}" with ${comboModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
+    log.info("TTS", `Combo "${comboNameTts}" with ${comboModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
     return handleComboChat({
 
       body,
       models: comboModels,
       handleSingleModel: (b, m) => handleSingleModelTts(b, m, responseFormat, language, apiKeyInfo),
       log,
-      comboName: modelStr,
+      comboName: comboNameTts,
       comboStrategy,
       comboStickyLimit,
     });

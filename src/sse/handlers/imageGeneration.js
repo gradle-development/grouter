@@ -16,7 +16,7 @@ import { handleImageGenerationCore } from "open-sse/handlers/imageGenerationCore
 import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig.js";
 import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.js";
-import { handleComboChat } from "open-sse/services/combo.js";
+import { handleComboChat, stripComboPrefix } from "open-sse/services/combo.js";
 import * as log from "../utils/logger.js";
 
 // Providers that don't require credentials (noAuth)
@@ -59,17 +59,18 @@ export async function handleImageGeneration(request) {
     if (!isComboAllowed(apiKeyInfo, modelStr)) {
       return errorResponse(HTTP_STATUS.FORBIDDEN, `Combo "${modelStr}" is not allowed for this API key`);
     }
+    const comboNameImg = stripComboPrefix(modelStr);
     const comboStrategies = settings.comboStrategies || {};
-    const comboStrategy = comboStrategies[modelStr]?.fallbackStrategy || settings.comboStrategy || "fallback";
+    const comboStrategy = comboStrategies[comboNameImg]?.fallbackStrategy || settings.comboStrategy || "fallback";
     const comboStickyLimit = settings.comboStickyRoundRobinLimit;
-    log.info("IMAGE", `Combo "${modelStr}" with ${comboModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
+    log.info("IMAGE", `Combo "${comboNameImg}" with ${comboModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
     return handleComboChat({
 
       body,
       models: comboModels,
       handleSingleModel: (b, m) => handleSingleModelImage(b, m, { wantsStream, binaryOutput, preferredConnectionId, apiKeyInfo }),
       log,
-      comboName: modelStr,
+      comboName: comboNameImg,
       comboStrategy,
       comboStickyLimit,
     });

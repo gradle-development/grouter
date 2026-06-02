@@ -198,7 +198,7 @@ async function buildAllModelEntries(kindFilter, combos, customModels, modelAlias
 
   for (const combo of combos) {
     if (!comboMatchesKinds(combo, kindFilter)) continue;
-    const entry = { id: combo.name };
+    const entry = { id: `combo/${combo.name}` };
     if (combo.kind === "webSearch" || combo.kind === "webFetch") {
       entry.kind = combo.kind;
     }

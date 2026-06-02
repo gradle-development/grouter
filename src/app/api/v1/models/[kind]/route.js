@@ -1,5 +1,6 @@
 import { buildModelsList } from "@/sse/services/allowedModels.js";
 import { isValidApiKey, extractApiKey, isProviderAllowed, isComboAllowed, isKindAllowed } from "@/sse/services/auth.js";
+import { stripComboPrefix } from "open-sse/services/combo.js";
 
 import { getSettings } from "@/lib/localDb";
 
@@ -67,10 +68,10 @@ export async function GET(request, { params }) {
 
     if (apiKeyInfo) {
       data = data.filter((model) => {
-        // Combo entries don't contain "/" — they use owned_by="combo"
-        const isCombo = !model.id.includes("/") && model.owned_by === "combo";
+        const isCombo = model.owned_by === "combo";
         if (isCombo) {
-          return isComboAllowed(apiKeyInfo, model.id);
+          const comboName = stripComboPrefix(model.id);
+          return isComboAllowed(apiKeyInfo, comboName);
         }
         const providerAlias = model.id.includes("/") ? model.id.split("/")[0] : model.owned_by;
         return isProviderAllowed(apiKeyInfo, providerAlias);

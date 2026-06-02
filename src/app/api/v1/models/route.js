@@ -10,6 +10,7 @@ import { getDisabledModels } from "@/lib/disabledModelsDb";
 import { resolveKiroModels } from "open-sse/services/kiroModels.js";
 import { resolveQoderModels } from "open-sse/services/qoderModels.js";
 import { extractApiKey, isValidApiKey, isProviderAllowed, isComboAllowed, isKindAllowed } from "@/sse/services/auth.js";
+import { stripComboPrefix } from "open-sse/services/combo.js";
 
 // Per-provider live model resolvers. Each receives a connection record and
 // returns { models: [{ id, name? }, ...] } | null on failure.
@@ -195,7 +196,7 @@ export async function buildModelsList(kindFilter) {
   for (const combo of combos) {
     if (!comboMatchesKinds(combo, kindFilter)) continue;
     const entry = {
-      id: combo.name,
+      id: `combo/${combo.name}`,
       object: "model",
       owned_by: "combo",
     };
@@ -449,10 +450,10 @@ export async function GET(request) {
 
     if (apiKeyInfo) {
       data = data.filter((model) => {
-        // Combo entries don't contain "/" — they use owned_by="combo"
-        const isCombo = !model.id.includes("/") && model.owned_by === "combo";
+        const isCombo = model.owned_by === "combo";
         if (isCombo) {
-          return isComboAllowed(apiKeyInfo, model.id);
+          const comboName = stripComboPrefix(model.id);
+          return isComboAllowed(apiKeyInfo, comboName);
         }
         const providerAlias = model.id.includes("/") ? model.id.split("/")[0] : model.owned_by;
         return isProviderAllowed(apiKeyInfo, providerAlias);
