@@ -30,6 +30,7 @@ import { compressMessages, formatRtkLog } from "../rtk/index.js";
 export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, apiKeyName, ccFilterNaming, rtkEnabled, cavemanEnabled, cavemanLevel, sourceFormatOverride, providerThinking }) {
   const { provider, model } = modelInfo;
   const requestStartTime = Date.now();
+  const isCompactRequest = body?._compact === true;
 
   const sourceFormat = sourceFormatOverride || detectFormat(body);
 
@@ -99,6 +100,21 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     toolNameMap = translatedBody._toolNameMap;
     delete translatedBody._toolNameMap;
     translatedBody.model = model;
+  }
+
+  // Compact/summary requests must stay text-only. Some models (notably Kimi via
+  // OpenAI-compatible endpoints) may still try to emit tool calls if tools leak through.
+  if (isCompactRequest) {
+    if (Array.isArray(translatedBody.tools) && translatedBody.tools.length > 0) {
+      log?.debug?.("COMPACT", `dropping ${translatedBody.tools.length} tools for compact request`);
+    }
+    delete translatedBody.tools;
+    delete translatedBody.tool_choice;
+    delete translatedBody.parallel_tool_calls;
+
+    if (provider === "nvidia" && typeof model === "string" && model.includes("kimi-k2.6")) {
+      log?.warn?.("COMPACT", `forcing text-only compact path for ${provider}/${model}`);
+    }
   }
 
   // Dedupe duplicate built-in tools when equivalent MCP tools are present (Claude clients only).
