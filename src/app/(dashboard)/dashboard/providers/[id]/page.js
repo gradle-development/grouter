@@ -10,6 +10,7 @@ import { getModelsByProviderId } from "@/shared/constants/models";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import { translate } from "@/i18n/runtime";
 import { fetchSuggestedModels } from "@/shared/utils/providerModelsFetcher";
+import { SUGGESTED_MODELS } from "@/shared/constants/suggestedModels";
 import ModelRow from "./ModelRow";
 import PassthroughModelsSection from "./PassthroughModelsSection";
 import CompatibleModelsSection from "./CompatibleModelsSection";
@@ -19,6 +20,24 @@ import EditCompatibleNodeModal from "./EditCompatibleNodeModal";
 import AddCustomModelModal from "./AddCustomModelModal";
 
 const ONE_BY_ONE_DELAY_MS = 1000;
+
+// Model-name families surfaced by the NVIDIA "Auto-Fetch & Test" button.
+const AUTO_FETCH_KEYWORDS = ["minimax", "glm", "deepseek", "gpt", "nemotron", "kimi"];
+// Limit parallel test requests so we don't hammer the upstream / trip rate-limit locks.
+const AUTO_FETCH_TEST_CONCURRENCY = 4;
+
+async function runWithConcurrency(items, limit, worker) {
+  const results = new Array(items.length);
+  let next = 0;
+  async function run() {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await worker(items[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));
+  return results;
+}
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -64,6 +83,7 @@ export default function ProviderDetailPage() {
   const [oneByOneSummary, setOneByOneSummary] = useState(null);
   const stopOneByOneRef = useRef(false);
   const [importingQoderModels, setImportingQoderModels] = useState(false);
+  const [fetchingModels, setFetchingModels] = useState(false);
   const { copied, copy } = useCopyToClipboard();
 
   const AG_RISK_STORAGE_KEY = "ag_risk_confirmed";
@@ -372,11 +392,17 @@ export default function ProviderDetailPage() {
     fetchDisabledModels();
   }, [fetchConnections, fetchAliases, fetchDisabledModels]);
 
-  // Fetch suggested models from provider's public API (if configured)
+  // Fetch suggested models from provider's public API (if configured),
+  // otherwise fall back to a curated list (e.g. NVIDIA, which has no fetcher).
   useEffect(() => {
-    const fetcher = (OAUTH_PROVIDERS[providerId] || APIKEY_PROVIDERS[providerId] || FREE_PROVIDERS[providerId] || FREE_TIER_PROVIDERS[providerId])?.modelsFetcher;
-    if (!fetcher) return;
-    fetchSuggestedModels(fetcher).then(setSuggestedModels);
+    const info = OAUTH_PROVIDERS[providerId] || APIKEY_PROVIDERS[providerId] || FREE_PROVIDERS[providerId] || FREE_TIER_PROVIDERS[providerId];
+    const fetcher = info?.modelsFetcher;
+    if (fetcher) {
+      fetchSuggestedModels(fetcher).then(setSuggestedModels);
+      return;
+    }
+    const curated = SUGGESTED_MODELS[providerId];
+    if (curated?.length) setSuggestedModels(curated);
   }, [providerId]);
 
   const handleSetAlias = async (modelId, alias, providerAliasOverride = providerAlias) => {
@@ -468,6 +494,134 @@ export default function ProviderDetailPage() {
       alert(translate("Error fetching models") + ": " + error.message);
     } finally {
       setImportingQoderModels(false);
+    }
+  };
+
+  // Fetch suggested models on demand (e.g. OpenCode Free) AND test each one.
+  // Some "-free" models drop their free promo over time (HTTP 401 "Free promotion
+  // has ended"), so we only suggest models that are actually reachable; unreachable
+  // ones are skipped with a short note.
+  const handleFetchSuggested = async () => {
+    const fetcher = providerInfo?.modelsFetcher;
+    if (!fetcher || fetchingModels) return;
+    setFetchingModels(true);
+    setModelsTestError("");
+    try {
+      const fetched = await fetchSuggestedModels(fetcher);
+      if (fetched.length === 0) {
+        setSuggestedModels([]);
+        setModelsTestError("No models returned by the provider.");
+        return;
+      }
+      // Test reachability in parallel via the internal test endpoint.
+      const tested = await Promise.all(
+        fetched.map(async (m) => {
+          try {
+            const res = await fetch("/api/models/test", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ model: `${providerStorageAlias}/${m.id}` }),
+            });
+            const data = await res.json();
+            return { ...m, ok: !!data.ok, error: data.ok ? "" : (data.error || "") };
+          } catch {
+            return { ...m, ok: false, error: "Network error" };
+          }
+        })
+      );
+      const working = tested.filter((m) => m.ok);
+      const failed = tested.filter((m) => !m.ok);
+      setSuggestedModels(working);
+      if (failed.length > 0) {
+        const sample = failed[0].error ? ` (e.g. ${failed[0].id}: ${failed[0].error})` : "";
+        setModelsTestError(`Skipped ${failed.length} unavailable free model(s): ${failed.map((m) => m.id).join(", ")}.${sample}`);
+      }
+    } catch (error) {
+      console.log("Error fetching suggested models:", error);
+      setModelsTestError("Failed to fetch models");
+    } finally {
+      setFetchingModels(false);
+    }
+  };
+
+  // Auto-detect models from the provider's live catalog (via an active connection),
+  // keep only the desired families (minimax/glm/deepseek/gpt/nemotron/kimi) that are
+  // not already added, test reachability, and push the working ones into suggestions.
+  const handleAutoFetchAndTest = async () => {
+    if (fetchingModels) return;
+    const conn = connections.find((c) => c.isActive !== false) || connections[0];
+    if (!conn) {
+      setModelsTestError("Add an active connection first.");
+      return;
+    }
+    setFetchingModels(true);
+    setModelsTestError("");
+    try {
+      const res = await fetch(`/api/providers/${conn.id}/models`);
+      const data = await res.json();
+      if (!res.ok) {
+        setModelsTestError(data.error || "Failed to fetch models");
+        return;
+      }
+      const rawIds = (data.models || [])
+        .map((m) => m?.id || m?.name || m?.model)
+        .filter((id) => typeof id === "string" && id.trim() !== "");
+
+      const matched = rawIds.filter((id) => {
+        const namePart = id.split("/").pop().toLowerCase();
+        return AUTO_FETCH_KEYWORDS.some((k) => namePart.includes(k));
+      });
+
+      const addedFullModels = new Set(Object.values(modelAliases));
+      const hardcodedIds = new Set(models.map((m) => m.id));
+      const suggestedIds = new Set(suggestedModels.map((m) => m.id));
+      const candidates = Array.from(new Set(matched)).filter(
+        (id) =>
+          !addedFullModels.has(`${providerStorageAlias}/${id}`) &&
+          !hardcodedIds.has(id) &&
+          !suggestedIds.has(id)
+      );
+
+      if (candidates.length === 0) {
+        setModelsTestError("No new matching models found (minimax/glm/deepseek/gpt/nemotron/kimi).");
+        return;
+      }
+
+      const tested = await runWithConcurrency(candidates, AUTO_FETCH_TEST_CONCURRENCY, async (id) => {
+        try {
+          const r = await fetch("/api/models/test", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model: `${providerStorageAlias}/${id}` }),
+          });
+          const d = await r.json();
+          return { id, name: id.split("/").pop(), ok: !!d.ok, error: d.ok ? "" : (d.error || "") };
+        } catch {
+          return { id, name: id.split("/").pop(), ok: false, error: "Network error" };
+        }
+      });
+
+      const working = tested.filter((m) => m.ok).map(({ id, name }) => ({ id, name }));
+      const failed = tested.filter((m) => !m.ok);
+
+      if (working.length > 0) {
+        setSuggestedModels((prev) => {
+          const seen = new Set(prev.map((m) => m.id));
+          return [...prev, ...working.filter((m) => !seen.has(m.id))];
+        });
+      }
+
+      if (working.length === 0) {
+        const sample = failed[0]?.error ? ` (e.g. ${failed[0].id}: ${failed[0].error.slice(0, 80)})` : "";
+        setModelsTestError(`Tested ${candidates.length} matched model(s), none reachable.${sample}`);
+      } else if (failed.length > 0) {
+        setModelsTestError(`Added ${working.length} model(s) to suggestions · skipped ${failed.length} unreachable.`);
+      }
+    } catch (error) {
+      console.log("Error auto-fetching models:", error);
+      setModelsTestError("Auto-fetch failed: " + error.message);
+    } finally {
+      setFetchingModels(false);
     }
   };
 
@@ -988,6 +1142,35 @@ export default function ProviderDetailPage() {
           Add Model
         </button>
 
+        {/* Fetch models from provider's public API (e.g. OpenCode Free) */}
+        {providerInfo?.modelsFetcher && (
+          <button
+            onClick={handleFetchSuggested}
+            disabled={fetchingModels}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-emerald-500/40 px-3 py-2 text-xs text-emerald-600 dark:text-emerald-400 transition-colors hover:border-emerald-500 hover:bg-emerald-500/5 sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <span className="material-symbols-outlined text-sm" style={fetchingModels ? { animation: "spin 1s linear infinite" } : undefined}>
+              {fetchingModels ? "progress_activity" : "download"}
+            </span>
+            {fetchingModels ? "Fetching & testing..." : "Fetch & Test"}
+          </button>
+        )}
+
+        {/* Auto-Fetch & Test — for connection-based providers without a public fetcher (e.g. NVIDIA).
+            Pulls the live catalog, keeps minimax/glm/deepseek/gpt/nemotron/kimi families, tests them. */}
+        {!isCompatible && !providerInfo?.modelsFetcher && connections.some((c) => c.isActive !== false) && (
+          <button
+            onClick={handleAutoFetchAndTest}
+            disabled={fetchingModels}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-emerald-500/40 px-3 py-2 text-xs text-emerald-600 dark:text-emerald-400 transition-colors hover:border-emerald-500 hover:bg-emerald-500/5 sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <span className="material-symbols-outlined text-sm" style={fetchingModels ? { animation: "spin 1s linear infinite" } : undefined}>
+              {fetchingModels ? "progress_activity" : "frame_inspect"}
+            </span>
+            {fetchingModels ? "Auto-fetching & testing..." : "Auto-Fetch & Test"}
+          </button>
+        )}
+
         {/* Import Qoder models button — only show for qoder provider */}
         {providerId === "qoder" && connections.some((conn) => conn.isActive !== false) && (
           <button
@@ -1010,19 +1193,20 @@ export default function ProviderDetailPage() {
             (m) => !addedFullModels.has(`${providerStorageAlias}/${m.id}`) && !hardcodedIds.has(m.id)
           );
           if (notAdded.length === 0) return null;
+          const hasCtx = notAdded.some((m) => m.contextLength);
           return (
             <div className="w-full mt-2">
-              <p className="text-xs text-text-muted mb-2">Suggested free models (≥200k context):</p>
+              <p className="text-xs text-text-muted mb-2">{hasCtx ? "Suggested free models (≥200k context):" : "Suggested free models:"}</p>
               <div className="flex flex-wrap gap-2">
                 {notAdded.map((m) => (
                   <button
                     key={m.id}
                     onClick={async () => {
-                      const alias = m.id.split("/").pop();
+                      const alias = providerInfo?.passthroughModels ? m.id.split("/").pop() : m.id;
                       await handleSetAlias(m.id, alias, providerStorageAlias);
                     }}
                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-black/10 dark:border-white/10 text-xs text-text-muted hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-colors"
-                    title={`${m.name} · ${(m.contextLength / 1000).toFixed(0)}k ctx`}
+                    title={m.contextLength ? `${m.name} · ${(m.contextLength / 1000).toFixed(0)}k ctx` : m.name}
                   >
                     <span className="material-symbols-outlined text-[13px]">add</span>
                     {m.id.split("/").pop()}
