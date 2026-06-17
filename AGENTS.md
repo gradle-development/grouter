@@ -1,55 +1,114 @@
-# 9router AI Agent Instructions
+# 9router — AI Agent Guide
 
-## Knowledge Base (Obsidian Vault)
+> **Universal API proxy**: One OpenAI-compatible endpoint → 100+ AI providers (LLM, image, TTS, STT, embedding, search). Next.js 16 + standalone output + PM2.
 
-**ALWAYS check the Obsidian vault first for 9router/ZCode knowledge:**
+## Quick Start
 
-- **Vault path**: `~/Documents/9router-knowledge/`
-- **Master file**: `~/Documents/9router-knowledge/ZCODE-KNOWLEDGE-FULL.md`
-- **Open vault**: `obsidian ~/Documents/9router-knowledge`
-- **Sync helper**: `obs-vault-sync [pull|push|status]`
-
-### Vault Structure
-```
-~/Documents/9router-knowledge/
-├── INDEX.md                    # Wiki-link index
-├── Overview.md                 # System overview
-├── ZCODE-KNOWLEDGE-FULL.md     # Master single-source-of-truth (mirrors /media/DiskE/Code/9router/ZCODE_KNOWLEDGE.md)
-├── ZCode-Architecture.md       # App structure, IPC, storage
-├── ZCode-Plan-Endpoint.md      # Endpoint, error codes, WAF routing
-├── ZCode-Captcha.md            # Aliyun captcha solving
-├── ZCode-Auth-Flow.md          # OAuth, tokens, JWT
-├── Test-Results.md             # All test results
-├── Code-Reference.md           # Function names, line numbers
-└── 9router-Integration.md      # Integration plan & status
+```bash
+pnpm install
+pnpm run build
+cp -r public .next/standalone/public
+cp -r .next/static .next/standalone/.next/static
+PORT=3003 pm2 start .next/standalone/server.js --name 9router
+pm2 save
 ```
 
-### Rules
-1. **Read from Obsidian vault FIRST** before working on 9router/ZCode tasks
-2. **Update both** `/media/DiskE/Code/9router/ZCODE_KNOWLEDGE.md` AND `~/Documents/9router-knowledge/ZCODE-KNOWLEDGE-FULL.md` when new info is found
-3. Use `obs-vault-sync pull` to copy from 9router → vault
-4. Use `obs-vault-sync push` to copy from vault → 9router
-5. Use `obs-vault-sync status` to check sync state
+Full deployment details: see [`agent.md`](./agent.md)
 
-### Key Findings (Quick Reference)
-- Plan endpoint: `https://zcode.z.ai/api/v1/zcode-plan/anthropic/v1/messages`
-- Auth: `Authorization: Bearer <zcodeJwtToken>` (NOT x-api-key)
-- Captcha headers: `X-Aliyun-Captcha-Verify-Param` + `X-Aliyun-Captcha-Verify-Region: sgp`
-- Anti-detection: Chrome UA + `navigator.webdriver=undefined` + mouse moves
-- Models: `GLM-5.2` (3M/day), `GLM-5-Turbo` (2M/day)
-- 9router dev port: 9000
-- Executors path: `open-sse/executors/zcode.js`
-- Provider config: `open-sse/config/providers.js:140`
+## Architecture
 
-### Current Blockers
-- Messages API returns 3001 (parameter error) for all body format variations
-- WAF body-shape routing: system:array→3012, content:array→3012, content:string→3001
-- ZCode desktop WORKS on same endpoint (187 successful requests in log)
-- Need exact body format ZCode sends
+```
+Client (OpenAI format) → /api/v1/* → SSE handlers → Translator → Executor → Provider
+                                                                    ↓
+                              Response ← Translator (provider → client format)
+```
 
-### Error Code Map
-- 200 = success
-- 3001 = parameter error (past WAF+auth+captcha, endpoint rejects)
-- 3007 = captcha verify failed
-- 3012 = method not allowed (WAF body-shape reject)
-- 401 = token invalid
+### Request Flow (Chat)
+1. `src/sse/handlers/chat.js` — auth, model resolution, retry loop
+2. `open-sse/handlers/chatCore.js` — translate, inject RTK/Caveman/Ponytail, execute
+3. `open-sse/translator/` — format conversion (OpenAI ↔ Claude/Gemini/Kiro/etc)
+4. `open-sse/executors/` — per-provider HTTP calls
+
+## Directory Structure
+
+```
+9router/
+├── src/                      # Next.js app
+│   ├── app/                  # Routes (dashboard, API endpoints)
+│   ├── lib/                  # DB, OAuth, utilities
+│   ├── shared/               # Shared constants, components, hooks
+│   └── sse/handlers/         # SSE request handlers (chat, tts, image, etc)
+│
+├── open-sse/                 # Provider-agnostic SSE engine (see open-sse/AGENTS.md)
+│   ├── config/               # ALL constants (providers, models, runtime)
+│   ├── executors/            # Per-provider upstream calls
+│   ├── handlers/             # Modality cores (chatCore, sttCore, etc)
+│   ├── translator/           # Format conversion (request/, response/, schema/)
+│   ├── providers/            # Registry + capabilities + pricing
+│   ├── rtk/                  # Token savers (caveman.js, ponytail.js)
+│   └── services/             # tokenRefresh, usage, combo, accountFallback
+│
+├── tests/                    # Vitest test suites
+├── public/                   # Static assets
+└── cli/                      # CLI tool
+```
+
+## Key Conventions
+
+1. **Config-driven**: All constants in `open-sse/config/` and `src/shared/constants/`. Never hardcode.
+2. **DRY**: Reuse `translator/schema/`, `translator/concerns/`, `translator/formats/`.
+3. **Provider registry**: Add to `open-sse/providers/registry/{id}.js`, regenerate index.
+4. **Translator pairs**: Register `request/<from>-to-<to>.js` + `response/<from>-to-<to>.js`.
+5. **ESM**: All imports use `.js` extension.
+
+## Adding Features
+
+| Task | Where | Notes |
+|------|-------|-------|
+| New provider | `open-sse/providers/registry/{id}.js` | Copy REGISTRY_TEMPLATE, add models to `providerModels.js` |
+| Custom executor | `open-sse/executors/{name}.js` | Subclass BaseExecutor, register in `index.js` |
+| New translator | `open-sse/translator/request\|response/` | Call `register(from, to, fn)`, import in `translator/index.js` |
+| Token saver | `open-sse/rtk/{name}.js` | Import in chatCore.js, add to handleChatCore params |
+| API endpoint | `src/app/api/{path}/route.js` | Next.js App Router |
+| Dashboard UI | `src/app/(dashboard)/dashboard/{page}/` | Client components |
+
+## Custom Features (9router-specific)
+
+- **ACL per API key**: `allowedProviders`, `allowedCombos`, `allowedKinds` in key settings
+- **Token Saver**: RTK (compress tool output) + Caveman (terse output) + Ponytail (YAGNI code)
+- **Combo strategies**: Fallback, Round Robin, Fusion (parallel + judge), Capacity auto-switch
+- **Provider nodes**: Custom OpenAI/Anthropic-compatible providers with UUID suffix
+
+## Testing
+
+```bash
+pnpm test                    # All tests
+pnpm test tests/unit/        # Unit tests only
+pnpm test tests/translator/  # Translator tests
+```
+
+## Important Files
+
+| File | Purpose |
+|------|---------|
+| `src/shared/constants/providers.js` | Provider definitions, aliases, ACL list |
+| `src/shared/constants/models.js` | Model definitions per provider |
+| `open-sse/config/providers.js` | Provider registry build |
+| `open-sse/handlers/chatCore.js` | Core chat handler (RTK/Caveman/Ponytail injection) |
+| `src/sse/services/auth.js` | API key validation, ACL checks |
+| `src/sse/services/allowedModels.js` | Model access control |
+
+## Troubleshooting
+
+- **502 Bad Gateway**: Check `PORT` env matches Nginx upstream (`pm2 env 9router | grep PORT`)
+- **Missing CSS/icons**: Run static copy step after build (see Quick Start)
+- **Provider 401/403**: Check token refresh logic in `open-sse/services/tokenRefresh/`
+- **Translator errors**: Check format detection in `open-sse/services/provider.js`
+
+## Sub-docs
+
+- [`open-sse/AGENTS.md`](./open-sse/AGENTS.md) — SSE engine details
+- [`tests/translator/AGENTS.md`](./tests/translator/AGENTS.md) — Translator testing
+- [`agent.md`](./agent.md) — Production deployment (Indonesian)
+- [`DOCKER.md`](./DOCKER.md) — Docker deployment
+- [`CHANGELOG.md`](./CHANGELOG.md) — Version history

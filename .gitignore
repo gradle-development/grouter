@@ -1,6 +1,6 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
+# =============================================================================
+# Dependencies
+# =============================================================================
 /node_modules
 /.pnp
 .pnp.*
@@ -9,70 +9,100 @@
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
+package-lock.json
 
-# testing
-/coverage
-
-# next.js
+# =============================================================================
+# Build output
+# =============================================================================
 /.next/
 /.next-cli-build/
 /out/
-cli/.build-home/
-product
-# production
 /build
+cli/.build-home/
+
+# =============================================================================
+# Environment & secrets (NEVER commit)
+# =============================================================================
+.env
+.env.*
+!.env.example
+.kiro/steering/secrets.md
+
+# =============================================================================
+# IDE & editor
+# =============================================================================
 .idea/
-chrome
-
-# misc
+.vscode/
+.cursor/
 .DS_Store
-*.pem
 
-# debug
+# =============================================================================
+# Logs & temp files
+# =============================================================================
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
-
-# env files (can opt-in for committing if needed)
-.env*
-!.env.example
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-
-.bin/*
-data/
+dev.out.log
+nohup.out
 logs/*
+*.pem
+
+# =============================================================================
+# Test artifacts & debug scripts
+# =============================================================================
+/coverage
+test-*.mjs
+solve-captcha.mjs
+.playwright-mcp/
+tests/__baseline__/current.json
+
+# =============================================================================
+# Temp notes & scratch docs
+# =============================================================================
+plan.md
+OAUTH_*.md
+ZCODE_KNOWLEDGE.md
+PR/*
+RM.md
+RM.vn.md
+PUBLIC.md
+PUBLIC.en.md
+Thanks.md
+README1.md
+
+# =============================================================================
+# Database (runtime)
+# =============================================================================
+*.db
+data/
+
+# =============================================================================
+# Misc exclusions
+# =============================================================================
+nul
+chrome/
+product
 source/*
-.cursor/*
-docs/*
-!docs/ARCHITECTURE.md
+.bin/*
 test/*
 open-sse/test/*
-RM.vn.md
-RM.md
-cursor/*
-PUBLIC.md
-Thanks.md
-PUBLIC.en.md
-PR/*
-package-lock.json
-
-
-#Ignore vscode AI rules
-.github/instructions/codacy.instructions.md
-README1.md
-deploy*.sh
+open-sse.old/
 ecosystem.config.*
-
+deploy*.sh
 scripts/agSniffer/*
 gitbooks/*
 gitbook/README.md
+.github/instructions/codacy.instructions.md
 
-# Refactor backup reference (do not bundle/lint)
-open-sse.old/
+# =============================================================================
+# TypeScript
+# =============================================================================
+*.tsbuildinfo
+next-env.d.ts
+
+# =============================================================================
+# Vercel
+# =============================================================================
+.vercel
