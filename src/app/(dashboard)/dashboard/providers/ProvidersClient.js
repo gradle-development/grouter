@@ -569,13 +569,21 @@ function ProviderCard({ providerId, provider, stats, authType, onToggle }) {
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {stats.total > 0 && (
-              <button
-                type="button"
-                className="opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
+              <div
+                role="button"
+                tabIndex={0}
+                className="opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                   onToggle(!allDisabled ? false : true);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onToggle(!allDisabled ? false : true);
+                  }
                 }}
                 aria-label={allDisabled ? "Enable provider" : "Disable provider"}
               >
@@ -585,7 +593,7 @@ function ProviderCard({ providerId, provider, stats, authType, onToggle }) {
                   onChange={() => {}}
                   title={allDisabled ? "Enable provider" : "Disable provider"}
                 />
-              </button>
+              </div>
             )}
           </div>
         </div>
@@ -699,13 +707,21 @@ function ApiKeyProviderCard({
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {stats.total > 0 && (
-              <button
-                type="button"
-                className="opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
+              <div
+                role="button"
+                tabIndex={0}
+                className="opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                   onToggle(!allDisabled ? false : true);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onToggle(!allDisabled ? false : true);
+                  }
                 }}
                 aria-label={allDisabled ? "Enable provider" : "Disable provider"}
               >
@@ -715,7 +731,7 @@ function ApiKeyProviderCard({
                   onChange={() => {}}
                   title={allDisabled ? "Enable provider" : "Disable provider"}
                 />
-              </button>
+              </div>
             )}
           </div>
         </div>

@@ -223,6 +223,33 @@ function isTokenExpired(connection) {
 }
 
 async function testOAuthConnection(connection, effectiveProxy = null) {
+  // zcode: test via subscription list endpoint using businessToken (not OAuth accessToken).
+  // ponytail: lightweight GET, no credits consumed. If businessToken is missing, reconnect.
+  if (connection.provider === "zcode" || connection.provider === "zc") {
+    const businessToken = connection.providerSpecificData?.businessToken;
+    if (!businessToken) {
+      return { valid: false, error: "No business token — please reconnect zcode", refreshed: false };
+    }
+    try {
+      const res = await fetchWithConnectionProxy("https://api.z.ai/api/biz/subscription/list", {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${businessToken}`,
+          "Accept": "application/json",
+          "User-Agent": "ZCode/3.1.0",
+          "X-ZCode-Agent": "glm",
+          "X-Platform": "linux-x64",
+        },
+      }, effectiveProxy);
+      if (res.ok) return { valid: true, error: null, refreshed: false, newTokens: null };
+      if (res.status === 401) return { valid: false, error: "Token invalid or revoked", refreshed: false };
+      if (res.status === 403) return { valid: false, error: "Access denied", refreshed: false };
+      return { valid: false, error: `API returned ${res.status}`, refreshed: false };
+    } catch (err) {
+      return { valid: false, error: err.message, refreshed: false };
+    }
+  }
+
   const config = OAUTH_TEST_CONFIG[connection.provider];
   if (!config) return { valid: false, error: "Provider test not supported", refreshed: false };
   if (!connection.accessToken) return { valid: false, error: "No access token", refreshed: false };

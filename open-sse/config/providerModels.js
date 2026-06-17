@@ -27,6 +27,14 @@ function withCodexReviewModels(models) {
 }
 
 export const PROVIDER_MODELS = {
+  // Zcode: 4 variants only (matches ZCode n$=["GLM-5.2","GLM-5-Turbo"] × thoughtLevel.enabled)
+  // ponytail: hardcoded 4; auto-fetch from api.z.ai when upstream publishes a model list endpoint
+  zcode: [
+    { id: "GLM-5.2", name: "GLM 5.2", reasoning: false },
+    { id: "GLM-5.2-Max", name: "GLM 5.2 Max", reasoning: true, quotaFamily: "max" },
+    { id: "GLM-5-Turbo", name: "GLM 5 Turbo", reasoning: false },
+    { id: "GLM-5-Turbo-Max", name: "GLM 5 Turbo Max", reasoning: true, quotaFamily: "max" },
+  ],
   // OAuth Providers (using alias)
   cc: [  // Claude Code
     { id: "claude-opus-4-8", name: "Claude Opus 4.8" },
@@ -914,7 +922,12 @@ const OAUTH_ALIASES = {
   "mimo-free": "mmf",
   vertex: "vertex",
   "vertex-partner": "vertex-partner",
+  zcode: "zc",
 };
+
+// ponytail: PROVIDER_ID_TO_ALIAS maps provider → alias; lookups like PROVIDER_MODELS[alias]
+// in v1/models/route need matching entries. Could be auto-generated from OAUTH_ALIASES.
+PROVIDER_MODELS.zc = PROVIDER_MODELS.zcode;
 
 // Derived from PROVIDERS — no need to maintain manually
 export const PROVIDER_ID_TO_ALIAS = Object.fromEntries(

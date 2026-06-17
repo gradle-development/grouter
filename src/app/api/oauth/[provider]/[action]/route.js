@@ -21,7 +21,7 @@ import {
 } from "@/lib/oauth/utils/server";
 
 const NO_PKCE_DEVICE_PROVIDERS = ["github", "kiro", "kimi-coding", "kilocode", "codebuddy", "qoder"];
-const NO_PKCE_EXCHANGE_PROVIDERS = ["cline"];
+const NO_PKCE_EXCHANGE_PROVIDERS = ["cline", "zcode"];
 const NO_PKCE_POLL_PROVIDERS = ["github", "kimi-coding", "kilocode", "codebuddy"];
 
 async function completeXaiManualCode(code, state) {
@@ -76,7 +76,9 @@ export async function GET(request, { params }) {
     const { searchParams } = new URL(request.url);
 
     if (action === "authorize") {
-      const redirectUri = searchParams.get("redirect_uri") || "http://localhost:8080/callback";
+      const ZCODE_REDIRECT_URI = "zcode://zai-auth/callback";
+      const redirectUri = searchParams.get("redirect_uri")
+        || (provider === "zcode" ? ZCODE_REDIRECT_URI : "http://localhost:8080/callback");
       // Collect provider-specific meta params (e.g. gitlab passes baseUrl, clientId, clientSecret)
       const reservedParams = new Set(["redirect_uri"]);
       const meta = {};

@@ -220,6 +220,10 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         redirectUri = "http://127.0.0.1:56121/callback";
       } else if (provider === "antigravity" || provider === "gemini-cli") {
         redirectUri = `http://localhost:${appPort}/callback`;
+      } else if (provider === "zcode") {
+        // Z.ai client (per ZCode source) only accepts custom URL scheme `zcode://zai-auth/callback`.
+        // Browser shows ERR_UNKNOWN_URL_SCHEME; user copies URL from address bar → manual paste.
+        redirectUri = "zcode://zai-auth/callback";
       } else {
         redirectUri = `https://api.bevansatria.my.id/callback`;
       }
@@ -291,8 +295,8 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         if (!popupRef.current) {
           setStep("input");
         }
-      } else if (!isLocalhost || provider === "codex" || provider === "xai") {
-        // Non-localhost or proxy failed: manual input mode
+      } else if (!isLocalhost || provider === "codex" || provider === "xai" || provider === "zcode") {
+        // Non-localhost or proxy failed or zcode (custom-scheme callback): manual input mode
         setStep("input");
         window.open(data.authUrl, "_blank");
       } else {
@@ -485,8 +489,15 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         return;
       }
 
+      // Zcode: accept bare code (no scheme/query) — use state from pending auth
+      if (provider === "zcode" && input && !input.includes("://") && !input.includes("?")) {
+        await exchangeTokens(input, authData?.state);
+        return;
+      }
+
+      // URL parsing works for both http(s):// and custom schemes like zcode://
       const url = new URL(input);
-      const code = url.searchParams.get("code");
+      const code = url.searchParams.get("code") || url.searchParams.get("authCode");
       const state = url.searchParams.get("state");
       const errorParam = url.searchParams.get("error");
 
@@ -495,7 +506,13 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
       }
 
       if (!code) {
-        throw new Error(provider === "xai" ? "Paste the callback URL or copied xAI code" : "No authorization code found in URL");
+        throw new Error(
+          provider === "xai"
+            ? "Paste the callback URL or copied xAI code"
+            : provider === "zcode"
+              ? "No authorization code found. Paste the full zcode:// URL from your browser's address bar (e.g. zcode://zai-auth/callback?code=...&state=...) or just the code value."
+              : "No authorization code found in URL"
+        );
       }
 
       await exchangeTokens(code, state);

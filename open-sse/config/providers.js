@@ -137,6 +137,13 @@ export const PROVIDERS = {
     format: "claude",
     headers: { ...CLAUDE_API_HEADERS }
   },
+  zcode: {
+    // Z.ai Claude-compatible endpoint. Auth uses business token (providerSpecificData.businessToken).
+    // ponytail: if 401, executor refreshes business token from /api/auth/z/login.
+    baseUrl: "https://api.z.ai/api/anthropic/v1/messages",
+    format: "claude",
+    headers: { ...CLAUDE_API_HEADERS }
+  },
   "glm-cn": {
     baseUrl: "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions",
     format: "openai",

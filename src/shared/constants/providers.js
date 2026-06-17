@@ -66,6 +66,8 @@ export const OAUTH_PROVIDERS = {
   kilocode: { id: "kilocode", alias: "kc", name: "Kilo Code", icon: "code", color: "#FF6B35", textIcon: "KC", website: "https://kilocode.ai", notice: { signupUrl: "https://kilocode.ai" } },
   cline: { id: "cline", alias: "cl", name: "Cline", icon: "smart_toy", color: "#5B9BD5", textIcon: "CL", website: "https://cline.bot", notice: { signupUrl: "https://cline.bot" } },
   // opencode: { id: "opencode", alias: "oc", name: "OpenCode", icon: "terminal", color: "#E87040", textIcon: "OC" },
+  // Zcode: Z.ai OAuth via zcode.z.ai proxy. Manual paste flow (zcode:// custom scheme).
+  zcode: { id: "zcode", alias: "zc", name: "Zcode", icon: "smart_toy", color: "#0EA5E9", textIcon: "ZC", deprecated: true, deprecationNotice: RISK_NOTICE, website: "https://z.ai", notice: { signupUrl: "https://chat.z.ai" }, serviceKinds: ["llm"] },
 };
 
 export const APIKEY_PROVIDERS = {
@@ -293,6 +295,7 @@ export const USAGE_SUPPORTED_PROVIDERS = [
   "minimax",
   "minimax-cn",
   "vercel-ai-gateway",
+  "zcode",
 ];
 
 // Subset that uses apikey auth (still surfaced on quota page)

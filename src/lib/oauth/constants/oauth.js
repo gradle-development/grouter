@@ -257,6 +257,25 @@ export const CODEBUDDY_CONFIG = {
   pollInterval: 5000,
 };
 
+// Z.ai OAuth Configuration (CONFIRMED from ZCode v3.1.0 source extraction 2026-06-16)
+// Architecture: ZCode does NOT hit chat.z.ai token endpoint directly. It uses a
+// proxy at zcode.z.ai which holds the client_secret server-side. We mirror that.
+export const ZAI_CONFIG = {
+  clientId: process.env.ZAI_OAUTH_CLIENT_ID || "client_P8X5CMWmlaRO9gyO-KSqtg", // CONFIRMED ZCode
+  clientSecret: process.env.ZAI_OAUTH_CLIENT_SECRET || "", // Server-side via zcode.z.ai proxy; not required for public client
+  authorizeUrl: process.env.ZAI_OAUTH_AUTHORIZE_URL || "https://chat.z.ai/api/oauth/authorize", // CONFIRMED ZCode
+  tokenUrl: process.env.ZAI_OAUTH_TOKEN_URL || "https://zcode.z.ai/api/v1/oauth/token", // CONFIRMED ZCode proxy
+  userInfoUrl: "https://chat.z.ai/api/oauth/userinfo", // CONFIRMED ZCode
+  businessLoginUrl: "https://api.z.ai/api/auth/z/login", // CONFIRMED ZCode (exchanges OAuth token for business token used by model API)
+  redirectUri: "zcode://zai-auth/callback", // CONFIRMED ZCode; browser shows ERR_UNKNOWN_URL_SCHEME, user copies URL from address bar
+  scopes: [], // ZCode sends no scopes; uses redirect_uri/response_type=code/client_id/state only
+  apiBaseUrl: "https://api.z.ai/api/anthropic", // CONFIRMED ZCode docs (Coding Plan proxy)
+  zcodePlanBaseUrl: "https://zcode.z.ai/api/v1/zcode-plan/anthropic", // CONFIRMED ZCode opencode config (Start Plan proxy)
+  subscriptionUrl: "https://api.z.ai/api/biz/subscription/list", // CONFIRMED ZCode (coding plan / quota)
+  userAgent: "9router/1.0",
+  region: "global",
+};
+
 // OAuth timeout (5 minutes)
 export const OAUTH_TIMEOUT = 300000;
 
@@ -278,4 +297,5 @@ const PROVIDERS = {
   CLINE: "cline",
   GITLAB: "gitlab",
   CODEBUDDY: "codebuddy",
+  ZAI: "zai",
 };

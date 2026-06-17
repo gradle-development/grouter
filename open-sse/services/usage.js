@@ -2,9 +2,29 @@
  * Usage Fetcher - Get usage data from provider APIs
  */
 
+import crypto from "crypto";
+import os from "os";
 import { CLIENT_METADATA, getPlatformUserAgent } from "../config/appConstants.js";
 import { proxyAwareFetch } from "../utils/proxyFetch.js";
 import { resolveDefaultProfileArn } from "../config/kiroConstants.js";
+
+// ponytail: ZCode source identity headers — generated once per process. Disguises 9router
+// as ZCode when calling api.z.ai (subscription/business-login endpoints). x-request-id
+// is per-request, added at the call site.
+let _zcodeSourceHeaders = null;
+function buildZCodeSourceHeaders() {
+  if (_zcodeSourceHeaders) return _zcodeSourceHeaders;
+  _zcodeSourceHeaders = {
+    "User-Agent": "ZCode/3.1.0",
+    "X-ZCode-Agent": "glm",
+    "X-Platform": `${os.platform() || "linux"}-${os.arch() || "x64"}`,
+    "X-Client-Language": "en",
+    "X-Client-Timezone": Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+    "X-Os-Category": "linux",
+    "X-Os-Version": os.release?.() || "",
+  };
+  return _zcodeSourceHeaders;
+}
 
 // GitHub API config
 const GITHUB_CONFIG = {
@@ -12,10 +32,13 @@ const GITHUB_CONFIG = {
   userAgent: "GitHubCopilotChat/0.26.7",
 };
 
-// GLM quota endpoints (region-aware)
+// GLM quota endpoints (region-aware).
+// Z.ai biz/subscription/list returns the user's active subscriptions with quota info.
+// Free-tier "150% Quota" accounts return data:[] (not a "subscription" in biz system).
+// monitor/usage/quota/limit is for coding-plan accounts only.
 const GLM_QUOTA_URLS = {
-  international: "https://api.z.ai/api/monitor/usage/quota/limit",
-  china: "https://open.bigmodel.cn/api/monitor/usage/quota/limit",
+  international: "https://api.z.ai/api/biz/subscription/list",
+  china: "https://open.bigmodel.cn/api/biz/subscription/list",
 };
 
 // MiniMax usage endpoints (try in order, fallback on transient errors)
@@ -91,6 +114,8 @@ export async function getUsageForProvider(connection, proxyOptions = null) {
       return await getIflowUsage(accessToken);
     case "ollama":
       return await getOllamaUsage(accessToken);
+    case "zcode":
+      return await getZcodeUsage(accessToken, providerSpecificData, proxyOptions);
     case "glm":
     case "glm-cn":
       return await getGlmUsage(apiKey, provider, proxyOptions);
@@ -1366,4 +1391,206 @@ async function getQoderUsage(accessToken, proxyOptions = null) {
   } catch (error) {
     return { message: `Qoder connected. Unable to fetch usage: ${error.message}` };
   }
+}
+
+/**
+ * Zcode (Z.ai) Usage — fetch live subscription/quota from api.z.ai/api/biz/subscription/list
+ * Auth uses businessToken (not OAuth accessToken). Falls back to accessToken if businessToken missing.
+ * Response shape varies by account type:
+ *   - Free tier ("150% Quota"): data:[]  → no subscription record, show "no active plan" message
+ *   - Paid/Coding plan: data:[{planName, limit, used, remaining, nextResetTime, ...}]
+ *   - Legacy: data:{quotaPools:{fiveHourPool:{remaining,total},...}}
+ * Parser is defensive — extracts whatever quota-like structures it finds.
+ */
+async function getZcodeUsage(accessToken, providerSpecificData, proxyOptions = null) {
+  const businessToken = providerSpecificData?.businessToken || accessToken;
+  if (!businessToken) {
+    return { message: "Zcode token not available. Please re-authorize the connection." };
+  }
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 10000);
+
+  let response;
+  try {
+    response = await proxyAwareFetch("https://api.z.ai/api/biz/subscription/list", {
+      method: "GET",
+      headers: {
+        ...buildZCodeSourceHeaders(),
+        "Authorization": `Bearer ${businessToken}`,
+        "Accept": "application/json",
+        "x-request-id": crypto.randomUUID(),
+      },
+      signal: ctrl.signal,
+    }, proxyOptions);
+  } catch (err) {
+    clearTimeout(timer);
+    return { message: `Zcode connected. Unable to fetch usage: ${err.message}` };
+  }
+  clearTimeout(timer);
+
+  if (!response.ok) {
+    return { message: `Zcode connected. Usage API returned ${response.status}.` };
+  }
+
+  const json = await response.json().catch(() => null);
+  if (!json) {
+    return { message: "Zcode connected. Usage API returned non-JSON response." };
+  }
+
+  // Z.ai Chinese API wrapper: { code, msg, success, data? }
+  // Success indicators: success === true, OR code is an HTTP success (200) or 0.
+  // Error indicators: success === false, OR code is an HTTP error (>= 400).
+  const isError = json.success === false || (typeof json.code === "number" && json.code >= 400);
+  if (isError) {
+    return { message: `Zcode usage error: ${json.msg || `code ${json.code}`}` };
+  }
+
+  // Empty array = no active subscription (common for free-tier "150% Quota" accounts)
+  if (Array.isArray(json?.data) && json.data.length === 0) {
+    return {
+      plan: "Free tier",
+      message: "Zcode connected. No active subscription on this account (free tier or quota not tracked here).",
+    };
+  }
+
+  const data = json?.data && typeof json.data === "object" ? json.data : json;
+  const plan =
+    data?.plan || data?.tier || data?.level || data?.planName ||
+    (typeof data?.planId === "string" ? data.planId : null) ||
+    "Z.ai";
+
+  const quotas = {};
+  const pct = (used, total) => total > 0 ? Math.max(0, Math.min(100, (used / total) * 100)) : 0;
+
+  // Path 1: limits array (Z.ai ZCode v3 format: [{type:"TOKENS_LIMIT", percentage, nextResetTime, ...}])
+  if (Array.isArray(data?.limits)) {
+    for (const limit of data.limits) {
+      if (!limit || limit.type !== "TOKENS_LIMIT") continue;
+      const usedPct = Number(limit.percentage) || 0;
+      const resetMs = Number(limit.nextResetTime) || 0;
+      const remaining = Math.max(0, 100 - usedPct);
+      const key = limit.name || limit.modelName || "session";
+      quotas[key] = {
+        used: usedPct,
+        total: 100,
+        remaining,
+        remainingPercentage: remaining,
+        resetAt: resetMs > 0 ? new Date(resetMs).toISOString() : null,
+        unlimited: false,
+      };
+    }
+  }
+
+  // Path 2: quotaPools (ZCode source likely uses this for tool/search quotas)
+  if (data?.quotaPools && typeof data.quotaPools === "object") {
+    const pools = Array.isArray(data.quotaPools) ? data.quotaPools : Object.values(data.quotaPools);
+    for (const pool of pools) {
+      if (!pool || typeof pool !== "object") continue;
+      const name = pool.name || pool.type || pool.modelName || "pool";
+      const remaining = Number(pool.remaining ?? pool.remain ?? 0);
+      const total = Number(pool.total ?? pool.limit ?? 0);
+      const used = Number(pool.used ?? Math.max(0, total - remaining));
+      quotas[name] = {
+        used, total, remaining,
+        remainingPercentage: pct(used, total),
+        resetAt: typeof pool.resetAt === "string" ? pool.resetAt :
+          pool.nextResetTime ? new Date(Number(pool.nextResetTime)).toISOString() : null,
+        unlimited: total === 0,
+      };
+    }
+  }
+
+  // Path 3: direct quotas object { modelName: {used, total, remaining, ...} }
+  if (data?.quotas && typeof data.quotas === "object" && !Array.isArray(data.quotas)) {
+    for (const [key, val] of Object.entries(data.quotas)) {
+      if (!val || typeof val !== "object") continue;
+      const used = Number(val.used ?? val.usage ?? 0);
+      const total = Number(val.total ?? val.limit ?? 0);
+      const remaining = Number(val.remaining ?? Math.max(0, total - used));
+      const resetMs = Number(val.resetAt ?? val.nextResetTime ?? 0);
+      quotas[key] = {
+        used, total, remaining,
+        remainingPercentage: pct(remaining, total) || pct(used, total),
+        resetAt: resetMs > 0 ? new Date(resetMs).toISOString() : (typeof val.resetAt === "string" ? val.resetAt : null),
+        unlimited: !!val.unlimited,
+      };
+    }
+  }
+
+  // Path 4: modelUsage map { modelName: {tokens/usage, total/limit} }
+  if (data?.modelUsage && typeof data.modelUsage === "object") {
+    for (const [modelName, val] of Object.entries(data.modelUsage)) {
+      if (!val || typeof val !== "object") continue;
+      const tokens = Number(val.tokens ?? val.usage ?? val.used ?? 0);
+      const total = Number(val.total ?? val.limit ?? 0);
+      const remaining = Number(val.remaining ?? Math.max(0, total - tokens));
+      quotas[modelName] = {
+        used: tokens, total, remaining,
+        remainingPercentage: pct(remaining, total) || pct(tokens, total),
+        resetAt: val.nextResetTime ? new Date(Number(val.nextResetTime)).toISOString() : null,
+        unlimited: total === 0,
+      };
+    }
+  }
+
+  // Path 5: planList (some Z.ai plans return array of {planName, limit, used, ...})
+  if (Array.isArray(data?.planList)) {
+    for (const item of data.planList) {
+      if (!item || typeof item !== "object") continue;
+      const name = item.name || item.planName || item.modelName || "plan";
+      const used = Number(item.used ?? item.usage ?? 0);
+      const total = Number(item.total ?? item.limit ?? 0);
+      const remaining = Number(item.remaining ?? Math.max(0, total - used));
+      quotas[name] = {
+        used, total, remaining,
+        remainingPercentage: pct(remaining, total) || pct(used, total),
+        resetAt: item.nextResetTime ? new Date(Number(item.nextResetTime)).toISOString() : null,
+        unlimited: total === 0,
+      };
+    }
+  }
+
+  // Path 6: top-level numeric fields (simple remaining/total/used)
+  if (Object.keys(quotas).length === 0 && (typeof data?.remaining === "number" || typeof data?.total === "number")) {
+    const remaining = Number(data.remaining ?? 0);
+    const total = Number(data.total ?? data.limit ?? 0);
+    const used = Number(data.used ?? Math.max(0, total - remaining));
+    quotas["usage"] = {
+      used, total, remaining,
+      remainingPercentage: pct(remaining, total) || pct(used, total),
+      resetAt: data.nextResetTime ? new Date(Number(data.nextResetTime)).toISOString() : null,
+      unlimited: total === 0,
+    };
+  }
+
+  // Path 7: data is an array of subscription objects (Z.ai biz/subscription/list for paid plans)
+  // Items have: { planName, modelName, limit, used, remaining, nextResetTime, ... }
+  if (Object.keys(quotas).length === 0 && Array.isArray(data)) {
+    for (const item of data) {
+      if (!item || typeof item !== "object") continue;
+      const name = item.planName || item.modelName || item.name || item.type || "subscription";
+      const used = Number(item.used ?? item.usage ?? 0);
+      const total = Number(item.total ?? item.limit ?? item.quota ?? 0);
+      const remaining = Number(item.remaining ?? Math.max(0, total - used));
+      const resetMs = item.nextResetTime ? Number(item.nextResetTime) : 0;
+      quotas[name] = {
+        used, total, remaining,
+        remainingPercentage: pct(remaining, total) || pct(used, total),
+        resetAt: resetMs > 0 ? new Date(resetMs).toISOString() : null,
+        unlimited: total === 0,
+      };
+    }
+  }
+
+  if (Object.keys(quotas).length === 0) {
+    // Fallback: expose raw field names so we can extend the parser without re-auth.
+    const rawKeys = data && typeof data === "object" ? Object.keys(data).slice(0, 12) : [];
+    return {
+      plan,
+      message: `Zcode connected. No quota data matched known shapes. Raw fields: [${rawKeys.join(", ")}]`,
+    };
+  }
+
+  return { plan, quotas };
 }
