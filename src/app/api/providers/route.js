@@ -66,9 +66,11 @@ export async function GET() {
       const name = isCompatible
         ? (c.name || nodeNameMap[c.provider] || c.providerSpecificData?.nodeName || c.provider)
         : c.name;
+      const providerDef = AI_PROVIDERS[c.provider];
       return {
         ...c,
         name,
+        alias: providerDef?.alias || null,
         apiKey: undefined,
         accessToken: undefined,
         refreshToken: undefined,

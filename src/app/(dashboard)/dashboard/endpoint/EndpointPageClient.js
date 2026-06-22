@@ -441,11 +441,11 @@ export default function APIPageClient({ machineId }) {
     const byProvider = {};
     for (const c of (connections || [])) {
       const p = c.provider;
-      if (!byProvider[p]) byProvider[p] = { id: p, count: 0 };
+      if (!byProvider[p]) byProvider[p] = { id: p, count: 0, alias: c.alias || null };
       byProvider[p].count++;
     }
     // Build final list with friendly names
-    return Object.values(byProvider).map(({ id, count }) => {
+    return Object.values(byProvider).map(({ id, count, alias }) => {
       const node = nodeMap[id];
       let displayName = id;
       let prefix = null;
@@ -453,7 +453,7 @@ export default function APIPageClient({ machineId }) {
         displayName = node.name || id;
         prefix = node.prefix || null;
       }
-      return { id, displayName, prefix, count };
+      return { id, displayName, prefix, alias, count };
     }).sort((a, b) => a.displayName.localeCompare(b.displayName));
   };
 
@@ -470,20 +470,20 @@ export default function APIPageClient({ machineId }) {
     setEditKinds(ak || []);
 
     // Resolve stored ACL provider values to provider IDs in our list
-    // Stored values can be: full provider ID, prefix (e.g. "tr"), or alias (e.g. "qd")
+    // Stored values can be: full provider ID, prefix (e.g. "tr"), or alias (e.g. "oc", "qd", "kc")
     if (ap && providerList.length > 0) {
       const matched = new Set();
       for (const stored of ap) {
         // Try direct match with provider ID
         const direct = providerList.find((p) => p.id === stored);
         if (direct) { matched.add(direct.id); continue; }
-        // Try match by prefix
+        // Try match by alias (e.g. "oc" → "opencode", "qd" → "qoder", "kc" → "kilocode")
+        const byAlias = providerList.find((p) => p.alias === stored);
+        if (byAlias) { matched.add(byAlias.id); continue; }
+        // Try match by prefix (e.g. "tr" → TokenRouter)
         const byPrefix = providerList.find((p) => p.prefix === stored);
         if (byPrefix) { matched.add(byPrefix.id); continue; }
-        // Try match by alias (provider ID starts with stored value or vice versa)
-        const byAlias = providerList.find((p) => p.id.startsWith(stored + "-") || p.id === stored);
-        if (byAlias) { matched.add(byAlias.id); continue; }
-        // Keep as-is (unknown reference)
+        // Keep as-is (unknown reference — may be a deleted provider)
         matched.add(stored);
       }
       setEditProviders([...matched]);
@@ -1368,7 +1368,7 @@ export default function APIPageClient({ machineId }) {
                           {key.allowedProviders.length === 0
                             ? "No providers"
                             : key.allowedProviders.map((stored) => {
-                                const p = providerList.find((pp) => pp.id === stored || pp.prefix === stored);
+                                const p = providerList.find((pp) => pp.id === stored || pp.alias === stored || pp.prefix === stored);
                                 return p ? p.displayName : stored;
                               }).join(", ")}
                         </span>
