@@ -82,7 +82,7 @@ Identical ACL flow but uses `isKindAllowed(apiKeyInfo, "stt")` instead of `"llm"
 
 ### Test Files
 - `tests/unit/handler-acl-enforcement.test.js` — 37 tests covering all ACL layers
-- `tests/unit/all-endpoints-robust.test.js` — 38 endpoint tests with ACL keys
+- `tests/unit/all-endpoints-robust.test.js` — 24 endpoint tests with ACL keys
 
 ---
 
@@ -98,6 +98,7 @@ Every POST /v1/chat/completions
   → handleChatCore() in chatCore.js
     → translateRequest() (format conversion)
     → RTK compressMessages() (context compression)
+    → Headroom compressWithHeadroom() (optional external proxy compression)
     → injectCaveman() (if enabled)
     → injectPonytail() (if enabled) ← HERE
     → executor.execute() (send to provider)
@@ -163,7 +164,7 @@ Self-hosted search provider for the `webSearch` service kind, no API key needed.
 ### Configuration
 - **File:** `open-sse/providers/registry/searxng.js`
 - `baseUrl: "http://127.0.0.1:8888/search"` — hardcoded to localhost
-- Docker container: `searxng/searxng:latest`, id `e8b61d91f057`, port 8888
+- Docker container: `searxng/searxng:latest`, port 8888
 - `authType: "none"`, `noAuth: true`
 - `searchTypes: ["web", "news"]`
 - `costPerQuery: 0`, `freeMonthlyQuota: 999999`
@@ -213,7 +214,7 @@ Request to /v1/*
 - `src/app/(dashboard)/dashboard/endpoint/EndpointPageClient.js` — UI toggle (shown when Require API Key is off)
 
 ### Test Coverage
-- `tests/unit/dashboard-guard.test.js` — 9 tests covering allow/reject/contradiction/fail-closed/loopback
+- `tests/unit/dashboard-guard.test.js` — 10 allowRemoteNoApiKey tests (28 total in file)
 
 ---
 
@@ -224,7 +225,6 @@ Request to /v1/*
 - If ALL parts are text → join with `"\n"` into plain string (OpenAI canonical format)
 - Otherwise → return array as-is (mixed content with images)
 - Used in `open-sse/translator/formats/openai.js` `filterToOpenAIFormat()`
-- Side effect: also fixed Kiro remote image URL bug (it.fails → it)
 
 ### `reasoningContentInjector` (regex fix)
 - **File:** `open-sse/utils/reasoningContentInjector.js`
@@ -374,4 +374,4 @@ If the node row doesn't exist (deleted between listing and POST), returns 404.
 | `src/dashboardGuard.js` | canAccessPublicLlmApi with allowRemoteNoApiKey gate |
 | `src/app/(dashboard)/dashboard/endpoint/EndpointPageClient.js` | allowRemoteNoApiKey toggle UI |
 | `src/app/api/providers/route.js` | Multi-connection per compatible node (removed one-connection guard) |
-| `tests/unit/dashboard-guard.test.js` | 9 allowRemoteNoApiKey tests |
+| `tests/unit/dashboard-guard.test.js` | 10 allowRemoteNoApiKey tests (28 total) |

@@ -29,6 +29,19 @@ export default function APIPageClient({ machineId }) {
   const [createdKey, setCreatedKey] = useState(null);
   const [confirmState, setConfirmState] = useState(null);
 
+  // ACL Edit Modal state
+  const [editingKey, setEditingKey] = useState(null); // key object being edited
+  const [editName, setEditName] = useState("");
+  const [editKinds, setEditKinds] = useState([]); // selected kinds
+  const [editProviders, setEditProviders] = useState([]); // selected provider IDs
+  const [editCombos, setEditCombos] = useState([]); // selected combo names
+  const [editKindsAll, setEditKindsAll] = useState(true); // null = all
+  const [editProvidersAll, setEditProvidersAll] = useState(true);
+  const [editCombosAll, setEditCombosAll] = useState(true);
+  const [editSaving, setEditSaving] = useState(false);
+  const [providerList, setProviderList] = useState([]);
+  const [comboList, setComboList] = useState([]);
+
   const [requireApiKey, setRequireApiKey] = useState(false);
   const [allowRemoteNoApiKey, setAllowRemoteNoApiKey] = useState(false);
   const [requireLogin, setRequireLogin] = useState(true);
@@ -414,12 +427,79 @@ export default function APIPageClient({ machineId }) {
     patchSetting({ ponytailLevel: level });
   };
 
+  // ── ACL Edit Key handlers ──────────────────────────────────────────
+  const ALL_KINDS = ["llm", "embedding", "image", "tts", "stt", "webSearch", "webFetch"];
+
+  const handleOpenEditKey = (key) => {
+    setEditingKey(key);
+    setEditName(key.name || "");
+    const ap = key.allowedProviders;
+    const ac = key.allowedCombos;
+    const ak = key.allowedKinds;
+    setEditProvidersAll(!ap);
+    setEditProviders(ap || []);
+    setEditCombosAll(!ac);
+    setEditCombos(ac || []);
+    setEditKindsAll(!ak);
+    setEditKinds(ak || []);
+  };
+
+  const handleSaveEditKey = async () => {
+    if (!editingKey) return;
+    setEditSaving(true);
+    try {
+      const body = {
+        allowedProviders: editProvidersAll ? null : editProviders,
+        allowedCombos: editCombosAll ? null : editCombos,
+        allowedKinds: editKindsAll ? null : editKinds,
+      };
+      const res = await fetch(`/api/keys/${editingKey.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setKeys((prev) => prev.map((k) => (k.id === editingKey.id ? { ...k, ...data.key } : k)));
+        setEditingKey(null);
+      }
+    } catch (error) {
+      console.log("Error saving key ACL:", error);
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const toggleEditProvider = (id) => {
+    setEditProviders((prev) => prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]);
+  };
+
+  const toggleEditCombo = (name) => {
+    setEditCombos((prev) => prev.includes(name) ? prev.filter((c) => c !== name) : [...prev, name]);
+  };
+
+  const toggleEditKind = (kind) => {
+    setEditKinds((prev) => prev.includes(kind) ? prev.filter((k) => k !== kind) : [...prev, kind]);
+  };
+
   const fetchData = async () => {
     try {
-      const keysRes = await fetch("/api/keys");
+      const [keysRes, providersRes, combosRes] = await Promise.all([
+        fetch("/api/keys"),
+        fetch("/api/providers"),
+        fetch("/api/combos"),
+      ]);
       const keysData = await keysRes.json();
       if (keysRes.ok) {
         setKeys(keysData.keys || []);
+      }
+      if (providersRes.ok) {
+        const pData = await providersRes.json();
+        setProviderList(pData.connections || []);
+      }
+      if (combosRes.ok) {
+        const cData = await combosRes.json();
+        setComboList(cData.combos || []);
       }
     } catch (error) {
       console.log("Error fetching data:", error);
@@ -1221,11 +1301,39 @@ export default function APIPageClient({ machineId }) {
                   <p className="text-xs text-text-muted mt-1">
                     Created {new Date(key.createdAt).toLocaleDateString()}
                   </p>
-                  {key.isActive === false && (
+                   {key.isActive === false && (
                     <p className="text-xs text-orange-500 mt-1">Paused</p>
+                  )}
+                  {/* ACL badges */}
+                  {(key.allowedProviders || key.allowedCombos || key.allowedKinds) && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {key.allowedProviders && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 dark:bg-blue-500/20">
+                          {key.allowedProviders.length === 0 ? "No providers" : `${key.allowedProviders.length} provider${key.allowedProviders.length > 1 ? "s" : ""}`}
+                        </span>
+                      )}
+                      {key.allowedCombos && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-500 dark:bg-purple-500/20">
+                          {key.allowedCombos.length === 0 ? "No combos" : `${key.allowedCombos.length} combo${key.allowedCombos.length > 1 ? "s" : ""}`}
+                        </span>
+                      )}
+                      {key.allowedKinds && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-500 dark:bg-green-500/20">
+                          {key.allowedKinds.length === 0 ? "No kinds" : key.allowedKinds.join(", ")}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
+                  {/* Edit ACL button */}
+                  <button
+                    onClick={() => handleOpenEditKey(key)}
+                    className="p-2 hover:bg-primary/10 rounded text-primary opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
+                    title="Edit access control"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">tune</span>
+                  </button>
                   <Toggle
                     size="sm"
                     checked={key.isActive ?? true}
@@ -1485,6 +1593,125 @@ export default function APIPageClient({ machineId }) {
           <Button onClick={() => setCreatedKey(null)} fullWidth>
             Done
           </Button>
+        </div>
+      </Modal>
+
+      {/* Edit ACL Modal */}
+      <Modal
+        isOpen={!!editingKey}
+        title={`Edit Access: ${editingKey?.name || ""}`}
+        onClose={() => !editSaving && setEditingKey(null)}
+      >
+        <div className="flex flex-col gap-5">
+          {/* Name */}
+          <div>
+            <label className="block text-sm font-medium mb-1">Key Name</label>
+            <Input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Key name" />
+          </div>
+
+          {/* Service Kinds */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium">Service Kinds</label>
+              <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                <input type="checkbox" checked={editKindsAll} onChange={(e) => setEditKindsAll(e.target.checked)} />
+                <span className="text-text-muted">All allowed</span>
+              </label>
+            </div>
+            {!editKindsAll && (
+              <div className="flex flex-wrap gap-2">
+                {ALL_KINDS.map((kind) => (
+                  <label key={kind} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs cursor-pointer transition-colors ${editKinds.includes(kind) ? "border-primary bg-primary/10 text-primary" : "border-border-subtle text-text-muted hover:border-primary/40"}`}>
+                    <input type="checkbox" className="hidden" checked={editKinds.includes(kind)} onChange={() => toggleEditKind(kind)} />
+                    {kind}
+                  </label>
+                ))}
+              </div>
+            )}
+            {editKindsAll && <p className="text-xs text-text-muted">This key can access all service kinds.</p>}
+          </div>
+
+          {/* Providers */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium">Providers</label>
+              <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                <input type="checkbox" checked={editProvidersAll} onChange={(e) => setEditProvidersAll(e.target.checked)} />
+                <span className="text-text-muted">All allowed</span>
+              </label>
+            </div>
+            {!editProvidersAll && (
+              <div className="max-h-48 overflow-y-auto border border-border-subtle rounded-lg p-2 space-y-1">
+                {providerList.length === 0 ? (
+                  <p className="text-xs text-text-muted p-2">No connections configured.</p>
+                ) : (
+                  providerList.map((conn) => {
+                    const id = conn.provider || conn.id;
+                    const checked = editProviders.includes(id);
+                    return (
+                      <label key={id} className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs cursor-pointer transition-colors ${checked ? "bg-primary/10 text-primary" : "hover:bg-surface-2"}`}>
+                        <input type="checkbox" checked={checked} onChange={() => toggleEditProvider(id)} className="rounded" />
+                        <span>{conn.name || id}</span>
+                        <span className="text-text-muted ml-auto text-[10px]">{id}</span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            )}
+            {editProvidersAll && <p className="text-xs text-text-muted">This key can access all providers.</p>}
+          </div>
+
+          {/* Combos */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium">Combos</label>
+              <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                <input type="checkbox" checked={editCombosAll} onChange={(e) => setEditCombosAll(e.target.checked)} />
+                <span className="text-text-muted">All allowed</span>
+              </label>
+            </div>
+            {!editCombosAll && (
+              <div className="max-h-40 overflow-y-auto border border-border-subtle rounded-lg p-2 space-y-1">
+                {comboList.length === 0 ? (
+                  <p className="text-xs text-text-muted p-2">No combos configured.</p>
+                ) : (
+                  comboList.map((combo) => {
+                    const name = combo.name || combo.id;
+                    const checked = editCombos.includes(name);
+                    return (
+                      <label key={name} className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs cursor-pointer transition-colors ${checked ? "bg-primary/10 text-primary" : "hover:bg-surface-2"}`}>
+                        <input type="checkbox" checked={checked} onChange={() => toggleEditCombo(name)} className="rounded" />
+                        <span>{name}</span>
+                        <span className="text-text-muted ml-auto text-[10px]">{combo.strategy || "fallback"}</span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            )}
+            {editCombosAll && <p className="text-xs text-text-muted">This key can access all combos.</p>}
+          </div>
+
+          {/* ACL info */}
+          <div className="text-xs text-text-muted bg-surface-2 rounded-lg p-3 border border-border-subtle">
+            <p className="font-medium mb-1">How it works:</p>
+            <ul className="list-disc pl-4 space-y-0.5">
+              <li><strong>All allowed</strong> = unrestricted (default). No ACL filtering.</li>
+              <li><strong>Unchecked + empty</strong> = deny everything of that type.</li>
+              <li><strong>Checked items</strong> = only those items are accessible.</li>
+            </ul>
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-3">
+            <Button onClick={() => setEditingKey(null)} variant="ghost" fullWidth disabled={editSaving}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveEditKey} fullWidth disabled={editSaving}>
+              {editSaving ? "Saving..." : "Save ACL"}
+            </Button>
+          </div>
         </div>
       </Modal>
 
