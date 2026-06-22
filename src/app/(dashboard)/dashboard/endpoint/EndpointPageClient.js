@@ -430,6 +430,33 @@ export default function APIPageClient({ machineId }) {
   // ── ACL Edit Key handlers ──────────────────────────────────────────
   const ALL_KINDS = ["llm", "embedding", "image", "tts", "stt", "webSearch", "webFetch"];
 
+  // Build unique provider list grouped from connections + nodes
+  const buildProviderList = (connections, nodes) => {
+    const nodeMap = {};
+    for (const n of (nodes || [])) {
+      const data = typeof n.data === "string" ? JSON.parse(n.data || "{}") : (n.data || {});
+      nodeMap[n.id] = { name: n.name, prefix: data.prefix, type: n.type };
+    }
+    // Group connections by provider
+    const byProvider = {};
+    for (const c of (connections || [])) {
+      const p = c.provider;
+      if (!byProvider[p]) byProvider[p] = { id: p, count: 0 };
+      byProvider[p].count++;
+    }
+    // Build final list with friendly names
+    return Object.values(byProvider).map(({ id, count }) => {
+      const node = nodeMap[id];
+      let displayName = id;
+      let prefix = null;
+      if (node) {
+        displayName = node.name || id;
+        prefix = node.prefix || null;
+      }
+      return { id, displayName, prefix, count };
+    }).sort((a, b) => a.displayName.localeCompare(b.displayName));
+  };
+
   const handleOpenEditKey = (key) => {
     setEditingKey(key);
     setEditName(key.name || "");
@@ -437,11 +464,32 @@ export default function APIPageClient({ machineId }) {
     const ac = key.allowedCombos;
     const ak = key.allowedKinds;
     setEditProvidersAll(!ap);
-    setEditProviders(ap || []);
     setEditCombosAll(!ac);
-    setEditCombos(ac || []);
     setEditKindsAll(!ak);
+    setEditCombos(ac || []);
     setEditKinds(ak || []);
+
+    // Resolve stored ACL provider values to provider IDs in our list
+    // Stored values can be: full provider ID, prefix (e.g. "tr"), or alias (e.g. "qd")
+    if (ap && providerList.length > 0) {
+      const matched = new Set();
+      for (const stored of ap) {
+        // Try direct match with provider ID
+        const direct = providerList.find((p) => p.id === stored);
+        if (direct) { matched.add(direct.id); continue; }
+        // Try match by prefix
+        const byPrefix = providerList.find((p) => p.prefix === stored);
+        if (byPrefix) { matched.add(byPrefix.id); continue; }
+        // Try match by alias (provider ID starts with stored value or vice versa)
+        const byAlias = providerList.find((p) => p.id.startsWith(stored + "-") || p.id === stored);
+        if (byAlias) { matched.add(byAlias.id); continue; }
+        // Keep as-is (unknown reference)
+        matched.add(stored);
+      }
+      setEditProviders([...matched]);
+    } else {
+      setEditProviders([]);
+    }
   };
 
   const handleSaveEditKey = async () => {
@@ -484,19 +532,27 @@ export default function APIPageClient({ machineId }) {
 
   const fetchData = async () => {
     try {
-      const [keysRes, providersRes, combosRes] = await Promise.all([
+      const [keysRes, providersRes, combosRes, nodesRes] = await Promise.all([
         fetch("/api/keys"),
         fetch("/api/providers"),
         fetch("/api/combos"),
+        fetch("/api/provider-nodes"),
       ]);
       const keysData = await keysRes.json();
       if (keysRes.ok) {
         setKeys(keysData.keys || []);
       }
+      let connections = [];
+      let nodes = [];
       if (providersRes.ok) {
         const pData = await providersRes.json();
-        setProviderList(pData.connections || []);
+        connections = pData.connections || [];
       }
+      if (nodesRes.ok) {
+        const nData = await nodesRes.json();
+        nodes = nData.nodes || [];
+      }
+      setProviderList(buildProviderList(connections, nodes));
       if (combosRes.ok) {
         const cData = await combosRes.json();
         setComboList(cData.combos || []);
@@ -1304,17 +1360,22 @@ export default function APIPageClient({ machineId }) {
                    {key.isActive === false && (
                     <p className="text-xs text-orange-500 mt-1">Paused</p>
                   )}
-                  {/* ACL badges */}
+                   {/* ACL badges */}
                   {(key.allowedProviders || key.allowedCombos || key.allowedKinds) && (
                     <div className="flex flex-wrap gap-1 mt-1">
                       {key.allowedProviders && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 dark:bg-blue-500/20">
-                          {key.allowedProviders.length === 0 ? "No providers" : `${key.allowedProviders.length} provider${key.allowedProviders.length > 1 ? "s" : ""}`}
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 dark:bg-blue-500/20" title={key.allowedProviders.join(", ")}>
+                          {key.allowedProviders.length === 0
+                            ? "No providers"
+                            : key.allowedProviders.map((stored) => {
+                                const p = providerList.find((pp) => pp.id === stored || pp.prefix === stored);
+                                return p ? p.displayName : stored;
+                              }).join(", ")}
                         </span>
                       )}
                       {key.allowedCombos && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-500 dark:bg-purple-500/20">
-                          {key.allowedCombos.length === 0 ? "No combos" : `${key.allowedCombos.length} combo${key.allowedCombos.length > 1 ? "s" : ""}`}
+                          {key.allowedCombos.length === 0 ? "No combos" : key.allowedCombos.join(", ")}
                         </span>
                       )}
                       {key.allowedKinds && (
@@ -1641,25 +1702,29 @@ export default function APIPageClient({ machineId }) {
               </label>
             </div>
             {!editProvidersAll && (
-              <div className="max-h-48 overflow-y-auto border border-border-subtle rounded-lg p-2 space-y-1">
+              <div className="max-h-60 overflow-y-auto border border-border-subtle rounded-lg p-2 space-y-1">
                 {providerList.length === 0 ? (
-                  <p className="text-xs text-text-muted p-2">No connections configured.</p>
+                  <p className="text-xs text-text-muted p-2">No providers configured.</p>
                 ) : (
-                  providerList.map((conn) => {
-                    const id = conn.provider || conn.id;
-                    const checked = editProviders.includes(id);
+                  providerList.map((p) => {
+                    const checked = editProviders.includes(p.id);
                     return (
-                      <label key={id} className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs cursor-pointer transition-colors ${checked ? "bg-primary/10 text-primary" : "hover:bg-surface-2"}`}>
-                        <input type="checkbox" checked={checked} onChange={() => toggleEditProvider(id)} className="rounded" />
-                        <span>{conn.name || id}</span>
-                        <span className="text-text-muted ml-auto text-[10px]">{id}</span>
+                      <label key={p.id} className={`flex items-center gap-2 px-2 py-2 rounded text-xs cursor-pointer transition-colors ${checked ? "bg-primary/10 text-primary" : "hover:bg-surface-2"}`}>
+                        <input type="checkbox" checked={checked} onChange={() => toggleEditProvider(p.id)} className="rounded" />
+                        <div className="flex-1 min-w-0">
+                          <span className="font-medium">{p.displayName}</span>
+                          {p.prefix && (
+                            <span className="ml-1.5 text-[10px] px-1 py-0.5 rounded bg-surface-2 text-text-muted font-mono">{p.prefix}</span>
+                          )}
+                        </div>
+                        <span className="text-text-muted text-[10px] shrink-0">{p.count} conn</span>
                       </label>
                     );
                   })
                 )}
               </div>
             )}
-            {editProvidersAll && <p className="text-xs text-text-muted">This key can access all providers.</p>}
+            {editProvidersAll && <p className="text-xs text-text-muted">This key can access all providers ({providerList.length}).</p>}
           </div>
 
           {/* Combos */}
