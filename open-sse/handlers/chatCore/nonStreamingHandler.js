@@ -1,6 +1,7 @@
 import { FORMATS } from "../../translator/formats.js";
 import { needsTranslation } from "../../translator/index.js";
 import { ollamaBodyToOpenAI } from "../../translator/response/ollama-to-openai.js";
+import { normalizeKimiToolCalls } from "../../utils/kimiToolParser.js";
 import { addBufferToUsage, filterUsageForFormat } from "../../utils/usageTracking.js";
 import { createErrorResult } from "../../utils/error.js";
 import { HTTP_STATUS } from "../../config/runtimeConfig.js";
@@ -8,6 +9,7 @@ import { parseSSEToOpenAIResponse } from "./sseToJsonHandler.js";
 import { buildRequestDetail, extractRequestConfig, extractUsageFromResponse, saveUsageStats } from "./requestDetail.js";
 import { appendRequestLog, saveRequestDetail } from "@/lib/usageDb.js";
 import { decloakToolNames } from "../../utils/claudeCloaking.js";
+import { extractToolNames } from "../../translator/concerns/toolCall.js";
 
 /**
  * Translate non-streaming response body from provider format → OpenAI format.
@@ -150,7 +152,7 @@ export async function handleNonStreamingResponse({ providerResponse, provider, m
 
   if (contentType.includes("text/event-stream")) {
     const sseText = await providerResponse.text();
-    const parsed = parseSSEToOpenAIResponse(sseText, model);
+    const parsed = parseSSEToOpenAIResponse(sseText, model, extractToolNames(body?.tools));
     if (!parsed) {
       appendLog({ status: `FAILED ${HTTP_STATUS.BAD_GATEWAY}` });
       return createErrorResult(HTTP_STATUS.BAD_GATEWAY, "Invalid SSE response for non-streaming request");
@@ -180,6 +182,21 @@ export async function handleNonStreamingResponse({ providerResponse, provider, m
     ? translateNonStreamingResponse(responseBody, targetFormat, sourceFormat)
     : responseBody;
 
+  // Native Kimi tool-call markup sometimes leaks into `content` instead of being
+  // returned as a structured `tool_calls` array (see .docs/audit/KIMI-WEIRD-OUTPUTS.md).
+  // Convert it for Kimi-family models before the finish_reason fixup.
+  const isKimiModel = /kimi-k2\./i.test(model || "");
+  if (isKimiModel && Array.isArray(translatedResponse?.choices)) {
+    for (const choice of translatedResponse.choices) {
+      const msg = choice?.message;
+      if (!msg || msg.role !== "assistant") continue;
+      const { message: normalized, hasTools } = normalizeKimiToolCalls(msg);
+      if (hasTools) {
+        choice.message = normalized;
+      }
+    }
+  }
+
   // Fix finish_reason for tool_calls: some providers return non-standard values (e.g. "other")
   if (translatedResponse?.choices?.[0]) {
     const choice = translatedResponse.choices[0];
@@ -204,13 +221,22 @@ export async function handleNonStreamingResponse({ providerResponse, provider, m
     translatedResponse.usage = filterUsageForFormat(addBufferToUsage(translatedResponse.usage), sourceFormat);
   }
 
-  // Strip reasoning_content only when content is non-empty.
+  // Strip reasoning_content when content is non-empty.
   // When content is empty (e.g. thinking models that used all tokens for reasoning),
   // reasoning_content is the only useful output and must be preserved.
+  // Also strip provider_specific_fields.reasoning_content (Kimchi puts it there).
   if (translatedResponse?.choices) {
     for (const choice of translatedResponse.choices) {
-      if (choice?.message?.reasoning_content && choice.message.content) {
-        delete choice.message.reasoning_content;
+      const msg = choice?.message;
+      if (!msg) continue;
+      if (msg.reasoning_content && msg.content) {
+        delete msg.reasoning_content;
+      }
+      if (msg.provider_specific_fields?.reasoning_content && msg.content) {
+        delete msg.provider_specific_fields.reasoning_content;
+      }
+      if (msg.provider_specific_fields?.reasoning && msg.content) {
+        delete msg.provider_specific_fields.reasoning;
       }
     }
   }

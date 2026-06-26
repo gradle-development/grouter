@@ -19,6 +19,7 @@ import { handleNonStreamingResponse } from "./chatCore/nonStreamingHandler.js";
 import { handleStreamingResponse, buildOnStreamComplete } from "./chatCore/streamingHandler.js";
 import { detectClientTool, isNativePassthrough } from "../utils/clientDetector.js";
 import { dedupeTools } from "../utils/toolDeduper.js";
+import { detectLoop } from "../utils/loopGuard.js";
 import { injectCaveman } from "../rtk/caveman.js";
 import { injectPonytail } from "../rtk/ponytail.js";
 import { injectTerminationPrompt, injectToolProtocolPrompt } from "../rtk/terminationPrompt.js";
@@ -39,6 +40,50 @@ function extractToolNames(tools) {
   return tools
     .map((tool) => tool?.function?.name || tool?.name)
     .filter((name) => typeof name === "string" && name.trim());
+}
+
+/**
+ * Loop guard: detect repeated tool_call patterns in the translated conversation
+ * history and, when found, append a stop-and-summarize hint to the last
+ * user/tool message so the model breaks out of the loop. Stateless — reads
+ * translatedBody.messages only. Idempotent: a hint already present is not
+ * re-appended. Returns true when a hint was injected.
+ */
+export function applyLoopGuard(translatedBody, finalFormat, provider, model, log) {
+  const loopCheck = detectLoop(translatedBody);
+  if (!loopCheck.detected) return false;
+  injectTerminationPrompt(translatedBody, finalFormat);
+  const msgs = translatedBody?.messages;
+  if (Array.isArray(msgs)) {
+    let target = null;
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const m = msgs[i];
+      if (m && (m.role === "user" || m.role === "tool")) {
+        target = m;
+        break;
+      }
+      // Text-only loop: last message is assistant (no user/tool after it).
+      // Append the hint to the last assistant message so the model sees the
+      // correction on its own repeated output.
+      if (m && m.role === "assistant" && i === msgs.length - 1) {
+        target = m;
+        break;
+      }
+    }
+    if (target) {
+      const hint = `\n\n[ROUTER NOTE: ${loopCheck.hint}]`;
+      if (typeof target.content === "string") {
+        if (!target.content.includes("[ROUTER NOTE:")) target.content += hint;
+      } else if (Array.isArray(target.content)) {
+        if (!target.content.some((p) => p.text && p.text.includes("[ROUTER NOTE:")))
+          target.content.push({ type: "text", text: hint });
+      } else {
+        target.content = hint.trimStart();
+      }
+    }
+  }
+  log?.warn?.("LOOPGUARD", `${provider}/${model} | loop detected, hint injected`);
+  return true;
 }
 
 /**
@@ -69,15 +114,18 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
 
   // Inject provider-level thinking config override (only if client hasn't set)
   // on/off → extended type (body.thinking), none/low/medium/high → effort type (body.reasoning_effort)
+  // Gate on model capabilities: skip for non-reasoning models (prevents 400 on GLM-5.1 etc.)
   if (providerThinking?.mode && providerThinking.mode !== "auto") {
-    const mode = providerThinking.mode;
-    if (mode === "on" && !body.thinking) {
-      console.log("Injecting provider-level thinking config override: on");
-      body = { ...body, thinking: { type: "enabled", budget_tokens: 10000 } };
-    } else if (mode === "off" && !body.thinking) {
-      body = { ...body, thinking: { type: "disabled" } };
-    } else if (!body.reasoning_effort) {
-      body = { ...body, reasoning_effort: mode };
+    const caps = getCapabilitiesForModel(provider, model);
+    if (caps?.reasoning) {
+      const mode = providerThinking.mode;
+      if (mode === "on" && !body.thinking) {
+        body = { ...body, thinking: { type: "enabled", budget_tokens: 10000 } };
+      } else if (mode === "off" && !body.thinking) {
+        if (caps.thinkingCanDisable !== false) body = { ...body, thinking: { type: "disabled" } };
+      } else if (!body.reasoning_effort) {
+        body = { ...body, reasoning_effort: mode };
+      }
     }
   }
 
@@ -192,14 +240,39 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     log?.debug?.("PONYTAIL", `${ponytailLevel} | ${finalFormat}`);
   }
 
-  if (TOOL_PROTOCOL_PROMPT_PROVIDERS.has(provider) && Array.isArray(translatedBody.tools) && translatedBody.tools.length > 0) {
+  if (TOOL_PROTOCOL_PROMPT_PROVIDERS.has(provider)) {
     injectToolProtocolPrompt(translatedBody, finalFormat, extractToolNames(translatedBody.tools));
     log?.debug?.("TOOLPROTO", `${provider}/${model} | ${finalFormat}`);
   }
 
-  if (needsTerminationPrompt(provider, model) && Array.isArray(translatedBody.tools) && translatedBody.tools.length > 0) {
+  applyLoopGuard(translatedBody, finalFormat, provider, model, log);
+
+  if (needsTerminationPrompt(provider, model)) {
     injectTerminationPrompt(translatedBody, finalFormat);
     log?.debug?.("TERMINATION", `${provider}/${model} | ${finalFormat}`);
+  }
+
+  // Re-apply provider-level thinking override on the translated body.
+  // translateRequest may strip non-standard fields (thinking, reasoning_effort)
+  // so we re-inject them here to ensure upstream receives the override.
+  // Gate on model capabilities: only inject thinking params for models that
+  // actually support reasoning (prevents 400 on non-reasoning models like GLM-5.1).
+  if (providerThinking?.mode && providerThinking.mode !== "auto") {
+    const caps = getCapabilitiesForModel(provider, model);
+    if (caps?.reasoning) {
+      const mode = providerThinking.mode;
+      if (mode === "off") {
+        translatedBody.reasoning_effort = "none";
+        if (caps.thinkingCanDisable !== false) translatedBody.thinking = { type: "disabled" };
+        log?.debug?.("THINKING", `${provider}/${model} | disabled`);
+      } else if (mode === "on") {
+        translatedBody.thinking = { type: "enabled", budget_tokens: 10000 };
+        log?.debug?.("THINKING", `${provider}/${model} | enabled (10k budget)`);
+      } else {
+        translatedBody.reasoning_effort = mode;
+        log?.debug?.("THINKING", `${provider}/${model} | effort=${mode}`);
+      }
+    }
   }
 
   const executor = getExecutor(provider);

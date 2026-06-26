@@ -1,52 +1,35 @@
-import { beforeEach, describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 
 // 9Router clamps max_tokens to a safe ceiling (8192) for Kimi NVIDIA — empirically a
 // large value (≥~32k) makes the model degenerate/loop. Smaller values pass through; it
-// never INJECTS a value when the client omits it.
-describe.skip("Kimi NVIDIA max_tokens clamp", () => {
-  beforeEach(() => { vi.resetModules(); });
-
-  async function calledBody(bodyExtra) {
+// never INJECTS a value when the client omits it. The clamp lives in
+// DefaultExecutor.transformRequest (per .docs/audit/03-code-state.md), which is the
+// body BaseExecutor.execute stringifies and sends upstream.
+describe("Kimi NVIDIA max_tokens clamp", () => {
+  async function transformedMaxTokens(model, bodyExtra) {
     const { DefaultExecutor } = await import("../../open-sse/executors/default.js");
-    const { BaseExecutor } = await import("../../open-sse/executors/base.js");
     const executor = new DefaultExecutor("nvidia");
-    const baseSpy = vi.spyOn(BaseExecutor.prototype, "execute").mockResolvedValue({
-      response: new Response(JSON.stringify({ choices: [{ message: { role: "assistant", content: "hi" } }] }), { status: 200, headers: { "content-type": "application/json" } }),
-      url: "https://example.test", headers: {}, transformedBody: {},
-    });
-    await executor.execute({
-      model: "moonshotai/kimi-k2.6",
-      body: { messages: [{ role: "user", content: "hello" }], ...bodyExtra },
-      stream: false, credentials: { apiKey: "k" }, signal: undefined, log: undefined, proxyOptions: null,
-    });
-    return baseSpy.mock.calls[0][0].body;
+    const out = executor.transformRequest(model, { messages: [{ role: "user", content: "hello" }], ...bodyExtra });
+    return out.max_tokens;
   }
 
   it("clamps a large max_tokens (64000) to the 8192 ceiling", async () => {
-    expect((await calledBody({ max_tokens: 64000 })).max_tokens).toBe(8192);
+    expect(await transformedMaxTokens("moonshotai/kimi-k2.6", { max_tokens: 64000 })).toBe(8192);
   });
 
   it("honors a small max_tokens (2048) unchanged", async () => {
-    expect((await calledBody({ max_tokens: 2048 })).max_tokens).toBe(2048);
+    expect(await transformedMaxTokens("moonshotai/kimi-k2.6", { max_tokens: 2048 })).toBe(2048);
   });
 
   it("does NOT inject max_tokens when client omits it", async () => {
-    expect((await calledBody({})).max_tokens).toBeUndefined();
+    expect(await transformedMaxTokens("moonshotai/kimi-k2.6", {})).toBeUndefined();
   });
 
   it("does NOT clamp non-Kimi NVIDIA models", async () => {
-    const { DefaultExecutor } = await import("../../open-sse/executors/default.js");
-    const { BaseExecutor } = await import("../../open-sse/executors/base.js");
-    const executor = new DefaultExecutor("nvidia");
-    const baseSpy = vi.spyOn(BaseExecutor.prototype, "execute").mockResolvedValue({
-      response: new Response(JSON.stringify({ choices: [{ message: { role: "assistant", content: "hi" } }] }), { status: 200, headers: { "content-type": "application/json" } }),
-      url: "https://example.test", headers: {}, transformedBody: {},
-    });
-    await executor.execute({
-      model: "meta/llama-3.1-8b-instruct",
-      body: { messages: [{ role: "user", content: "hi" }], max_tokens: 64000 },
-      stream: false, credentials: { apiKey: "k" }, signal: undefined, log: undefined, proxyOptions: null,
-    });
-    expect(baseSpy.mock.calls[0][0].body.max_tokens).toBe(64000);
+    expect(await transformedMaxTokens("meta/llama-3.1-8b-instruct", { max_tokens: 64000 })).toBe(64000);
+  });
+
+  it("clamps K2.7 too (regex covers both .6 and .7)", async () => {
+    expect(await transformedMaxTokens("moonshotai/kimi-k2.7", { max_tokens: 50000 })).toBe(8192);
   });
 });

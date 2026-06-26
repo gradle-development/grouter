@@ -10,7 +10,7 @@ const SPINNER_SIZES = {
 };
 
 // Spinner loading
-function Spinner({ size = "md", className }) {
+export function Spinner({ size = "md", className }) {
 
   return (
     <span
@@ -26,7 +26,7 @@ function Spinner({ size = "md", className }) {
 }
 
 // Full page loading
-function PageLoading({ message = "Loading..." }) {
+export function PageLoading({ message = "Loading..." }) {
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-bg">
       <Spinner size="xl" />
@@ -36,7 +36,7 @@ function PageLoading({ message = "Loading..." }) {
 }
 
 // Skeleton loading
-function Skeleton({ className, ...props }) {
+export function Skeleton({ className, ...props }) {
   return (
     <div
       className={cn(

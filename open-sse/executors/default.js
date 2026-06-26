@@ -158,6 +158,16 @@ export class DefaultExecutor extends BaseExecutor {
         delete transformed.client_metadata;
       }
       stripUnsupportedParams(this.provider, model, transformed);
+      // NVIDIA NIM kimi-k2.x degenerates (loops / empty output) when max_tokens is
+      // very large (>=~32k). Clamp oversized client values to a safe ceiling; smaller
+      // values pass through unchanged and absent max_tokens is never injected. Mirrors
+      // the contract in tests/unit/kimi-max-tokens.test.js (commit 3dd7a9e5, since
+      // reverted via the registry consolidation refactor).
+      if (this.provider === "nvidia" && /kimi-k2\.(6|7)/i.test(model)) {
+        if (typeof transformed.max_tokens === "number" && transformed.max_tokens > 8192) {
+          transformed.max_tokens = 8192;
+        }
+      }
     }
 
     return injectReasoningContent({ provider: this.provider, model, body: transformed });

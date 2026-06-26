@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { needsTerminationPrompt } from "../../open-sse/handlers/chatCore.js";
-import { injectTerminationPrompt, TERMINATION_PROMPT } from "../../open-sse/rtk/terminationPrompt.js";
+import { injectTerminationPrompt, injectToolProtocolPrompt, TERMINATION_PROMPT } from "../../open-sse/rtk/terminationPrompt.js";
 import { FORMATS } from "../../open-sse/translator/formats.js";
 
 describe("injectTerminationPrompt", () => {
@@ -59,5 +59,22 @@ describe("injectTerminationPrompt", () => {
     expect(needsTerminationPrompt("kimi", "kimi-k2.7")).toBe(true);
     expect(needsTerminationPrompt("nvidia", "moonshotai/kimi-k2.7")).toBe(true);
     expect(needsTerminationPrompt("openai", "gpt-5.5")).toBe(false);
+  });
+});
+
+describe("injectToolProtocolPrompt (no-tools fallback)", () => {
+  it("injects base protocol text when toolNames is empty", () => {
+    const body = { messages: [{ role: "user", content: "hi" }] };
+    injectToolProtocolPrompt(body, FORMATS.OPENAI, []);
+    const allContent = JSON.stringify(body.messages);
+    expect(allContent).toContain("tool_call mechanism");
+    expect(allContent).not.toContain("Valid tool names:");
+  });
+
+  it("lists valid tool names when toolNames is non-empty", () => {
+    const body = { messages: [{ role: "user", content: "hi" }] };
+    injectToolProtocolPrompt(body, FORMATS.OPENAI, ["bash", "read"]);
+    const allContent = JSON.stringify(body.messages);
+    expect(allContent).toContain("Valid tool names: bash, read");
   });
 });
