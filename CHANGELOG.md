@@ -1,15 +1,15 @@
-# v0.7.2 (2026-06-29)
+# v0.7.3 (2026-06-29)
 
-Publish npm package under the scoped name `@vanroute/vansrouter`. The unscoped `vansrouter` name on npmjs.com is owned by the upstream `decolua/9router` project and cannot be republished.
+Publish npm package under the unscoped name `vansrouter`. The user owns `vansrouter` on npmjs.com via account `blugaaaaaaaa`; earlier attempts failed because the tokens in use were organization-scoped (`vanroute` org) instead of USER-scoped from the owner account.
 
 ## Changed
-- Rename CLI npm package from `vansrouter` to `@vanroute/vansrouter`.
-- Update version endpoint, updater config, sidebar messages, and CLI README install commands to use the new scoped name.
-- Bump version to `0.7.2` (`0.7.0` and `0.7.1` npm publish attempts failed silently with E404 because the unscoped package name was already taken upstream).
+- Keep CLI npm package name as `vansrouter` (revert from scoped `@vanroute/vansrouter` experiment).
+- Update version endpoint, updater config, sidebar messages, and CLI README install commands back to `vansrouter`.
+- Bump version to `0.7.3` (v0.7.0/v0.7.1/v0.7.2 npm publish attempts failed with E404 due to org-scoped tokens).
 
 ## Install
 ```bash
-npm install -g @vanroute/vansrouter
+npm install -g vansrouter
 ```
 
 # v0.7.0 (2026-06-29)
