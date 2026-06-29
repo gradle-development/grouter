@@ -1,3 +1,16 @@
+# v0.7.4 (2026-06-29)
+
+Publish with a 2FA-bypass token (Classic Automation or Granular with bypass enabled). Earlier v0.7.3 publish attempt failed with EOTP because the token required an authenticator OTP; this release uses a bypass-2FA token issued from the package owner account (blugaaaaaaaa) so CI can publish without interactive 2FA.
+
+## Changed
+- Bump version to 0.7.4.
+- No source changes since v0.7.3; this is a release-pipeline fix.
+
+## Install
+```bash
+npm install -g vansrouter
+```
+
 # v0.7.3 (2026-06-29)
 
 Publish npm package under the unscoped name `vansrouter`. The user owns `vansrouter` on npmjs.com via account `blugaaaaaaaa`; earlier attempts failed because the tokens in use were organization-scoped (`vanroute` org) instead of USER-scoped from the owner account.
