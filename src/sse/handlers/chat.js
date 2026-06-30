@@ -178,6 +178,8 @@ export async function handleChat(request, clientRawRequest = null) {
       comboStrategy,
       comboStickyLimit,
       signal: request?.signal ?? null,
+      timeoutMs: comboStrategies[modelStr]?.targetTimeoutMs ?? null,
+      queueDepth: comboStrategies[modelStr]?.queueDepth ?? null,
     });
   }
 
@@ -236,6 +238,8 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
         comboStrategy,
         comboStickyLimit,
         signal: request?.signal ?? null,
+        timeoutMs: comboStrategies[modelStr]?.targetTimeoutMs ?? null,
+        queueDepth: comboStrategies[modelStr]?.queueDepth ?? null,
       });
     }
     log.warn("CHAT", "Invalid model format", { model: modelStr });
@@ -406,7 +410,11 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
     let semaphoreRelease = () => {};
     if (semaphoreKey && semaphoreMax != null) {
       try {
-        semaphoreRelease = await acquireAccountSemaphore(semaphoreKey, { maxConcurrency: semaphoreMax, timeoutMs: 30_000 });
+        const semaphoreOptions = { maxConcurrency: semaphoreMax, timeoutMs: 30_000 };
+        if (options?.maxQueueSize != null) {
+          semaphoreOptions.maxQueueSize = options.maxQueueSize;
+        }
+        semaphoreRelease = await acquireAccountSemaphore(semaphoreKey, semaphoreOptions);
       } catch (e) {
         if (isSemaphoreCapacityError(e)) {
           log.warn("AUTH", `Account ${credentials.connectionName} at capacity, trying fallback`);

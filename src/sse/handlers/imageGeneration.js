@@ -68,7 +68,6 @@ export async function handleImageGeneration(request) {
     const comboStickyLimit = settings.comboStickyRoundRobinLimit;
     log.info("IMAGE", `Combo "${comboNameImg}" with ${comboModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
     return handleComboChat({
-
       body,
       models: comboModels,
       handleSingleModel: (b, m) => handleSingleModelImage(b, m, { wantsStream, binaryOutput, preferredConnectionId, apiKeyInfo }),
@@ -76,6 +75,8 @@ export async function handleImageGeneration(request) {
       comboName: comboNameImg,
       comboStrategy,
       comboStickyLimit,
+      timeoutMs: comboStrategies[comboNameImg]?.targetTimeoutMs ?? null,
+      queueDepth: comboStrategies[comboNameImg]?.queueDepth ?? null,
     });
   }
 

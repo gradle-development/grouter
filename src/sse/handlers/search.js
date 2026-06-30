@@ -94,14 +94,15 @@ export async function handleSearch(request) {
     const comboStickyLimit = settings.comboStickyRoundRobinLimit;
     log.info("SEARCH", `Combo "${comboNameSearch}" with ${comboModels.length} providers (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
     return handleComboChat({
-
       body,
       models: comboModels,
       handleSingleModel: (b, m) => handleSingleProviderSearch(b, m, request, apiKey, settings, apiKeyInfo),
       log,
       comboName: comboNameSearch,
       comboStrategy,
-      comboStickyLimit
+      comboStickyLimit,
+      timeoutMs: comboStrategies[comboNameSearch]?.targetTimeoutMs ?? null,
+      queueDepth: comboStrategies[comboNameSearch]?.queueDepth ?? null,
     });
   }
 

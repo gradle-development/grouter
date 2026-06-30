@@ -6,6 +6,7 @@ import {
   PROVIDER_FAILURE_ERROR_CODES,
 } from "../utils/circuitBreaker.js";
 import { classify429 } from "../utils/classify429.js";
+import { getProviderResilienceProfile } from "../config/providerProfiles.js";
 
 /**
  * Calculate exponential backoff cooldown for rate limits (429)
@@ -433,10 +434,12 @@ export function recordProviderFailure(provider, statusCode, errorText, log, conn
   // Only count failure-eligible status codes
   if (statusCode && !PROVIDER_FAILURE_ERROR_CODES.has(statusCode)) return;
 
+  const profile = getProviderResilienceProfile(provider);
   const breakerKey = `${provider}:${proxyHash}`;
   const breaker = getCircuitBreaker(breakerKey, {
-    failureThreshold: 5,
-    resetTimeout: 30_000,
+    failureThreshold: profile.providerFailureThreshold,
+    failureWindowMs: profile.providerFailureWindowMs,
+    resetTimeout: profile.providerCooldownMs,
   });
   if (!breaker) return;
   if (!breaker.canExecute()) return; // already OPEN, skip

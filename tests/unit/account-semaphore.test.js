@@ -122,6 +122,18 @@ describe("AccountSemaphore", () => {
     });
   });
 
+  describe("idle gate cleanup", () => {
+    it("deletes the gate once all slots are released and the queue is empty", async () => {
+      const key = buildAccountSemaphoreKey({ provider: "cleanup-test", accountKey: "acc" });
+      const release = await acquire(key, { maxConcurrency: 1 });
+      expect(getAccountSemaphoreStats().some(s => s.key === key)).toBe(true);
+      release();
+      // Wait for the immediate cleanup timer to fire.
+      await new Promise(r => setTimeout(r, 20));
+      expect(getAccountSemaphoreStats().some(s => s.key === key)).toBe(false);
+    });
+  });
+
   describe("resolveAccountSemaphoreKey", () => {
     it("returns null when provider is missing", () => {
       expect(resolveAccountSemaphoreKey({ provider: null, connectionId: "x" })).toBe(null);

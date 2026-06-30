@@ -47,17 +47,24 @@ function ensureGate(semaphoreKey, maxConcurrency) {
   return gate;
 }
 
+function cleanupGateIfIdle(semaphoreKey, gate) {
+  if (!gate) return;
+  if (gate.running === 0 && gate.queue.length === 0 && (!gate.blockedUntil || Date.now() >= gate.blockedUntil)) {
+    if (gate.cleanupTimer) {
+      clearTimeout(gate.cleanupTimer);
+      gate.cleanupTimer = null;
+    }
+    gates.delete(semaphoreKey);
+  }
+}
+
 function scheduleCleanup(semaphoreKey, gate) {
   if (gate.cleanupTimer) return;
-  const delay = 5 * 60 * 1000; // 5 min idle cleanup
+  // Immediate cleanup attempt on next tick, then keep only a short safety window.
   gate.cleanupTimer = setTimeout(() => {
-    if (gate.running === 0 && gate.queue.length === 0) {
-      gates.delete(semaphoreKey);
-    } else {
-      gate.cleanupTimer = null;
-      scheduleCleanup(semaphoreKey, gate);
-    }
-  }, delay);
+    gate.cleanupTimer = null;
+    cleanupGateIfIdle(semaphoreKey, gate);
+  }, 0);
   if (typeof gate.cleanupTimer.unref === "function") gate.cleanupTimer.unref();
 }
 
@@ -155,6 +162,11 @@ function drainQueue(semaphoreKey, gate) {
       gate.running--;
       drainQueue(semaphoreKey, gate);
     });
+  }
+
+  // If nothing is running and nothing is waiting, schedule an immediate cleanup.
+  if (gate.running === 0 && gate.queue.length === 0 && (!gate.blockedUntil || Date.now() >= gate.blockedUntil)) {
+    scheduleCleanup(semaphoreKey, gate);
   }
 }
 

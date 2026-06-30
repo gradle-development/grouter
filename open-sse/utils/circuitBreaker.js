@@ -62,6 +62,8 @@ class CircuitBreaker {
     this.openedAt = null;
     this.resetTimeoutMs = options.resetTimeout || DEFAULT_RESET_TIMEOUT_MS;
     this.failureThreshold = options.failureThreshold || DEFAULT_FAILURE_THRESHOLD;
+    this.failureWindowMs = options.failureWindowMs || 0; // 0 = cumulative (legacy behavior)
+    this.failureTimestamps = []; // only used when failureWindowMs > 0
     this.halfOpenRequests = options.halfOpenRequests || DEFAULT_HALF_OPEN_REQUESTS;
     this.halfOpenRemaining = 0;
     this.maxBackoffMultiplier = options.maxBackoffMultiplier || DEFAULT_MAX_BACKOFF_MULTIPLIER;
@@ -127,10 +129,32 @@ class CircuitBreaker {
     }
   }
 
+  _pruneFailureTimestamps() {
+    if (!this.failureWindowMs || this.failureWindowMs <= 0) return;
+    const cutoff = Date.now() - this.failureWindowMs;
+    const idx = this.failureTimestamps.findIndex((ts) => ts >= cutoff);
+    if (idx > 0) {
+      this.failureTimestamps = this.failureTimestamps.slice(idx);
+    } else if (idx === -1) {
+      this.failureTimestamps = [];
+    }
+  }
+
+  _countFailuresInWindow() {
+    if (!this.failureWindowMs || this.failureWindowMs <= 0) return this.failureCount;
+    this._pruneFailureTimestamps();
+    return this.failureTimestamps.length;
+  }
+
   _onFailure(error) {
     if (this.isFailure && !this.isFailure(error)) return;
     this.failureCount++;
     this.lastFailureTime = Date.now();
+
+    if (this.failureWindowMs > 0) {
+      this.failureTimestamps.push(Date.now());
+      this._pruneFailureTimestamps();
+    }
 
     if (this.state === STATE.HALF_OPEN) {
       this.openProbeCycles++;
@@ -148,10 +172,11 @@ class CircuitBreaker {
     }
 
     const effectiveThreshold = kindThreshold?.threshold || this.failureThreshold;
+    const failureCount = this._countFailuresInWindow();
 
-    if (this.failureCount >= effectiveThreshold) {
+    if (failureCount >= effectiveThreshold) {
       this._transition(STATE.OPEN);
-    } else if (this.failureCount >= this.degradationThreshold) {
+    } else if (failureCount >= this.degradationThreshold) {
       if (this.state === STATE.CLOSED) this._transition(STATE.DEGRADED);
     }
   }

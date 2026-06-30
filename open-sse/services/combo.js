@@ -268,9 +268,10 @@ function combineSignals(...signals) {
  * @param {number|string} [options.comboStickyLimit=1] - Requests per combo model before switching
  * @param {AbortSignal} [options.signal] - Optional external signal (e.g. client disconnect) that aborts every target
  * @param {number} [options.timeoutMs=DEFAULT_COMBO_TARGET_TIMEOUT_MS] - Max time to wait for a target to return response headers
+ * @param {number} [options.queueDepth] - Optional per-combo account-semaphore queue depth (0 = fail immediately on saturation)
  * @returns {Promise<Response>}
  */
-export async function handleComboChat({ body, models, handleSingleModel, log, comboName, comboStrategy, comboStickyLimit = 1, autoSwitch = true, signal = null, timeoutMs = DEFAULT_COMBO_TARGET_TIMEOUT_MS }) {
+export async function handleComboChat({ body, models, handleSingleModel, log, comboName, comboStrategy, comboStickyLimit = 1, autoSwitch = true, signal = null, timeoutMs = DEFAULT_COMBO_TARGET_TIMEOUT_MS, queueDepth = null }) {
   // Apply rotation strategy if enabled
   let rotatedModels = getRotatedModels(models, comboName, comboStrategy, comboStickyLimit);
 
@@ -314,6 +315,9 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
         let timedOut = false;
 
         const targetSignal = combineSignals(signal, timeoutController.signal);
+        const targetOptions = {};
+        if (targetSignal) targetOptions.signal = targetSignal;
+        if (queueDepth != null) targetOptions.maxQueueSize = queueDepth;
 
         const timeoutPromise = new Promise((resolve) => {
           timeoutId = setTimeout(() => {
@@ -331,7 +335,7 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
 
         try {
           result = await Promise.race([
-            Promise.resolve(handleSingleModel(body, modelStr, targetSignal ? { signal: targetSignal } : undefined)).catch((err) => {
+            Promise.resolve(handleSingleModel(body, modelStr, Object.keys(targetOptions).length > 0 ? targetOptions : undefined)).catch((err) => {
               if (timedOut) {
                 // The inner call rejected because we aborted it. The synthetic 524
                 // from timeoutPromise already won the race; return an empty response

@@ -110,14 +110,15 @@ export async function handleFetch(request) {
     const comboStickyLimit = settings.comboStickyRoundRobinLimit;
     log.info("FETCH", `Combo "${comboNameFetch}" with ${comboModels.length} providers (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
     return handleComboChat({
-
       body,
       models: comboModels,
       handleSingleModel: (b, m) => handleSingleProviderFetch(b, m, request, apiKey, settings, apiKeyInfo),
       log,
       comboName: comboNameFetch,
       comboStrategy,
-      comboStickyLimit
+      comboStickyLimit,
+      timeoutMs: comboStrategies[comboNameFetch]?.targetTimeoutMs ?? null,
+      queueDepth: comboStrategies[comboNameFetch]?.queueDepth ?? null,
     });
   }
 

@@ -245,4 +245,28 @@ describe("combo per-target timeout", () => {
     expect(res.status).toBe(524);
     expect(handleSingleModel).toHaveBeenCalledTimes(2);
   });
+
+  it("passes maxQueueSize through to the model handler", async () => {
+    const handleSingleModel = vi.fn(async (_body, model, opts) => {
+      if (model === "openai/gpt-4o") {
+        expect(opts?.maxQueueSize).toBe(0);
+        return errResponse(429, "rate limit", "conn-a");
+      }
+      expect(opts?.maxQueueSize).toBe(0);
+      return okResponse("hello", "conn-b");
+    });
+
+    const res = await handleComboChat({
+      body: { messages: [{ role: "user", content: "hi" }] },
+      models: ["openai/gpt-4o", "gemini/gemini-1.5-flash"],
+      handleSingleModel,
+      log,
+      comboName: "test-combo",
+      comboStrategy: "fallback",
+      queueDepth: 0,
+    });
+
+    expect(res.ok).toBe(true);
+    expect(handleSingleModel).toHaveBeenCalledTimes(2);
+  });
 });
