@@ -143,3 +143,106 @@ describe("fusion combo header propagation", () => {
     expect(res.headers.get("X-VansRoute-Selected-Connection-Id")).toBeNull();
   });
 });
+
+describe("combo per-target timeout", () => {
+  it("times out a hanging model and falls back to the next model", async () => {
+    const handleSingleModel = vi.fn(async (_body, model) => {
+      if (model === "openai/gpt-4o") {
+        return new Promise(() => {}); // never resolves
+      }
+      return okResponse("hello from gemini", "conn-gemini-ok");
+    });
+
+    const res = await handleComboChat({
+      body: { messages: [{ role: "user", content: "hi" }] },
+      models: ["openai/gpt-4o", "gemini/gemini-1.5-flash"],
+      handleSingleModel,
+      log,
+      comboName: "test-combo",
+      comboStrategy: "fallback",
+      timeoutMs: 50,
+    });
+
+    expect(res.ok).toBe(true);
+    expect(res.headers.get("X-VansRoute-Selected-Connection-Id")).toBe("conn-gemini-ok");
+    expect(handleSingleModel).toHaveBeenCalledTimes(2);
+  });
+
+  it("propagates a timeout signal to the model handler", async () => {
+    const handleSingleModel = vi.fn(async (_body, model, opts) => {
+      if (model === "openai/gpt-4o") {
+        return new Promise((resolve, reject) => {
+          const timer = setTimeout(() => resolve(okResponse("slow", "conn-slow")), 10_000);
+          opts?.signal?.addEventListener("abort", () => {
+            clearTimeout(timer);
+            reject(new Error("aborted by combo timeout"));
+          }, { once: true });
+        });
+      }
+      return okResponse("hello from gemini", "conn-gemini-ok");
+    });
+
+    const res = await handleComboChat({
+      body: { messages: [{ role: "user", content: "hi" }] },
+      models: ["openai/gpt-4o", "gemini/gemini-1.5-flash"],
+      handleSingleModel,
+      log,
+      comboName: "test-combo",
+      comboStrategy: "fallback",
+      timeoutMs: 50,
+    });
+
+    expect(res.ok).toBe(true);
+    expect(handleSingleModel).toHaveBeenCalledTimes(2);
+  });
+
+  it("aborts the current target when the external signal is aborted", async () => {
+    const controller = new AbortController();
+    const handleSingleModel = vi.fn(async (_body, model, opts) => {
+      if (model === "openai/gpt-4o") {
+        return new Promise((resolve, reject) => {
+          const timer = setTimeout(() => resolve(okResponse("slow", "conn-slow")), 10_000);
+          opts?.signal?.addEventListener("abort", () => {
+            clearTimeout(timer);
+            reject(new Error("aborted by client"));
+          }, { once: true });
+        });
+      }
+      return okResponse("should not be reached", "conn-other");
+    });
+
+    const promise = handleComboChat({
+      body: { messages: [{ role: "user", content: "hi" }] },
+      models: ["openai/gpt-4o", "gemini/gemini-1.5-flash"],
+      handleSingleModel,
+      log,
+      comboName: "test-combo",
+      comboStrategy: "fallback",
+      signal: controller.signal,
+      timeoutMs: 10_000,
+    });
+
+    setTimeout(() => controller.abort(), 50);
+
+    const res = await promise;
+    expect(res.status).toBe(499);
+  });
+
+  it("returns a 524 when every combo model times out", async () => {
+    const handleSingleModel = vi.fn(async () => new Promise(() => {}));
+
+    const res = await handleComboChat({
+      body: { messages: [{ role: "user", content: "hi" }] },
+      models: ["openai/gpt-4o", "gemini/gemini-1.5-flash"],
+      handleSingleModel,
+      log,
+      comboName: "test-combo",
+      comboStrategy: "fallback",
+      timeoutMs: 50,
+    });
+
+    expect(res.ok).toBe(false);
+    expect(res.status).toBe(524);
+    expect(handleSingleModel).toHaveBeenCalledTimes(2);
+  });
+});

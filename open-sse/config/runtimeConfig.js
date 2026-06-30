@@ -52,6 +52,12 @@ export const FETCH_CONNECT_TIMEOUT_MS = envMs("FETCH_CONNECT_TIMEOUT_MS", 60 * 1
 // Gemini native TTS fetch timeout: abort if Google does not return response headers in time.
 export const GEMINI_NATIVE_TTS_FETCH_TIMEOUT_MS = envMs("GEMINI_NATIVE_TTS_FETCH_TIMEOUT_MS", 45 * 1000);
 
+// Combo per-target timeout: abort a combo member that does not return response
+// headers within this duration and fall back to the next member.
+// For streaming this bounds time-to-first-headers only, not token generation.
+// Env: COMBO_TARGET_TIMEOUT_MS.
+export const DEFAULT_COMBO_TARGET_TIMEOUT_MS = envMs("COMBO_TARGET_TIMEOUT_MS", 120 * 1000);
+
 // Default token limits
 export const DEFAULT_MAX_TOKENS = 64000;
 export const DEFAULT_MIN_TOKENS = 32000;

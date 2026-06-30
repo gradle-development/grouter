@@ -4,6 +4,7 @@
 
 import { checkFallbackError, formatRetryAfter } from "./accountFallback.js";
 import { unavailableResponse } from "../utils/error.js";
+import { DEFAULT_COMBO_TARGET_TIMEOUT_MS } from "../config/runtimeConfig.js";
 import { getCapabilitiesForModel } from "../providers/capabilities.js";
 import { extractTextContent } from "../translator/formats/gemini.js";
 
@@ -228,18 +229,48 @@ export function getComboModelsFromData(modelStr, combosData) {
 }
 
 /**
+ * Combine multiple AbortSignals into one. The returned signal aborts as soon as
+ * any source aborts. Sources that are not AbortSignal instances are ignored.
+ */
+function combineSignals(...signals) {
+  const sources = signals.filter((s) => s && typeof s.addEventListener === "function");
+  if (sources.length === 0) return null;
+  if (sources.length === 1) return sources[0];
+
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  let aborted = false;
+
+  for (const sig of sources) {
+    if (sig.aborted) {
+      aborted = true;
+      break;
+    }
+    sig.addEventListener("abort", onAbort, { once: true });
+  }
+
+  if (aborted) {
+    controller.abort();
+  }
+
+  return controller.signal;
+}
+
+/**
  * Handle combo chat with fallback
  * @param {Object} options
  * @param {Object} options.body - Request body
  * @param {string[]} options.models - Array of model strings to try
- * @param {Function} options.handleSingleModel - Function to handle single model: (body, modelStr) => Promise<Response>
+ * @param {Function} options.handleSingleModel - Function to handle single model: (body, modelStr, { signal }) => Promise<Response>
  * @param {Object} options.log - Logger object
  * @param {string} [options.comboName] - Name of the combo (for round-robin tracking)
  * @param {string} [options.comboStrategy] - Strategy: "fallback" or "round-robin"
  * @param {number|string} [options.comboStickyLimit=1] - Requests per combo model before switching
+ * @param {AbortSignal} [options.signal] - Optional external signal (e.g. client disconnect) that aborts every target
+ * @param {number} [options.timeoutMs=DEFAULT_COMBO_TARGET_TIMEOUT_MS] - Max time to wait for a target to return response headers
  * @returns {Promise<Response>}
  */
-export async function handleComboChat({ body, models, handleSingleModel, log, comboName, comboStrategy, comboStickyLimit = 1, autoSwitch = true }) {
+export async function handleComboChat({ body, models, handleSingleModel, log, comboName, comboStrategy, comboStickyLimit = 1, autoSwitch = true, signal = null, timeoutMs = DEFAULT_COMBO_TARGET_TIMEOUT_MS }) {
   // Apply rotation strategy if enabled
   let rotatedModels = getRotatedModels(models, comboName, comboStrategy, comboStickyLimit);
 
@@ -261,11 +292,61 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
 
   for (let i = 0; i < rotatedModels.length; i++) {
     const modelStr = rotatedModels[i];
+
+    // Honor external abort before trying the next target.
+    if (signal?.aborted) {
+      log.info("COMBO", "External signal aborted — stopping combo fallback");
+      return new Response(
+        JSON.stringify({ error: { message: "Client disconnected" } }),
+        { status: 499, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
     log.info("COMBO", `Trying model ${i + 1}/${rotatedModels.length}: ${modelStr}`);
 
     try {
-      const result = await handleSingleModel(body, modelStr);
-      
+      let result;
+      if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+        result = await handleSingleModel(body, modelStr);
+      } else {
+        const timeoutController = new AbortController();
+        let timeoutId;
+        let timedOut = false;
+
+        const targetSignal = combineSignals(signal, timeoutController.signal);
+
+        const timeoutPromise = new Promise((resolve) => {
+          timeoutId = setTimeout(() => {
+            timedOut = true;
+            log.warn("COMBO", `Model ${modelStr} exceeded ${timeoutMs}ms timeout — falling back`);
+            timeoutController.abort(new Error("combo-per-model-timeout"));
+            resolve(
+              new Response(
+                JSON.stringify({ error: { message: `Model ${modelStr} timed out` } }),
+                { status: 524, headers: { "Content-Type": "application/json" } }
+              )
+            );
+          }, timeoutMs);
+        });
+
+        try {
+          result = await Promise.race([
+            Promise.resolve(handleSingleModel(body, modelStr, targetSignal ? { signal: targetSignal } : undefined)).catch((err) => {
+              if (timedOut) {
+                // The inner call rejected because we aborted it. The synthetic 524
+                // from timeoutPromise already won the race; return an empty response
+                // so the loser branch resolves cleanly without leaking err.message.
+                return new Response(null, { status: 599 });
+              }
+              throw err;
+            }),
+            timeoutPromise,
+          ]);
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      }
+
       // Success (2xx) - return response
       if (result.ok) {
         log.info("COMBO", `Model ${modelStr} succeeded`);
