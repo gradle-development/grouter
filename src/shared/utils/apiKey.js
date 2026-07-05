@@ -1,11 +1,39 @@
 import crypto from "crypto";
+import fs from "fs";
+import path from "path";
+import os from "os";
+
+function getDataDir() {
+  if (process.env.DATA_DIR) return process.env.DATA_DIR;
+  return process.platform === "win32"
+    ? path.join(process.env.APPDATA || os.homedir(), "9router")
+    : path.join(os.homedir(), ".9router");
+}
 
 function getApiKeySecret() {
   const secret = process.env.API_KEY_SECRET;
-  if (!secret) {
-    throw new Error("API_KEY_SECRET environment variable is required");
-  }
-  return secret;
+  if (secret) return secret;
+
+  const dataDir = getDataDir();
+  const secretPath = path.join(dataDir, "auth", "api-key-secret");
+
+  try {
+    const stored = fs.readFileSync(secretPath, "utf8").trim();
+    if (stored) {
+      process.env.API_KEY_SECRET = stored;
+      return stored;
+    }
+  } catch {}
+
+  const newSecret = crypto.randomBytes(32).toString("hex");
+
+  try {
+    fs.mkdirSync(path.dirname(secretPath), { recursive: true });
+    fs.writeFileSync(secretPath, newSecret, { mode: 0o600 });
+  } catch {}
+
+  process.env.API_KEY_SECRET = newSecret;
+  return newSecret;
 }
 
 /**

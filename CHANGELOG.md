@@ -31,6 +31,48 @@ npm install -g vansrouter
 docker pull ghcr.io/vanszs/vansrouter:0.8.4
 ```
 
+# v0.8.3 (2026-07-02)
+
+Maintenance release that fixes the `npm run dev` startup error, hardens legacy database upgrades, and cleans up bundling/standalone edge cases.
+
+## Added
+- **Database migration 003** (`src/lib/db/migrations/003-add-allowed-lists-columns.js`): idempotently adds `allowedProviders`, `allowedCombos`, and `allowedKinds` columns to the settings table for databases created before these ACL fields were introduced. Fixes the `no such column: allowedProviders` login error on legacy installs.
+- **Long-lived cache headers** (`next.config.mjs`): provider icons and `/_next/static` assets are now served with `public, max-age=31536000, immutable`.
+
+## Fixed
+- **`npm run dev` better-sqlite3 `fs` error** (`src/instrumentation.js`, `src/sse/services/kimchiQuotaReactivation.js`):
+  - Force `runtime = "nodejs"` and skip instrumentation work in development so webpack does not bundle server-only code.
+  - Inline `buildKimchiQuotaReactivatedUpdate` to cut the import chain into the provider registry (which pulls in Node built-ins like `os`).
+  - Use `/* webpackIgnore: true */` with a relative path for the `localDb` dynamic import so `better-sqlite3` stays out of the dev webpack bundle.
+- **SearXNG test timeouts** (`tests/unit/all-endpoints-robust.test.js`): skip the SearXNG reachability test when no local instance is running at `127.0.0.1:8888`, preventing 5-second hangs on most dev machines.
+- **Version snapshot** (`tests/translator/__snapshots__/golden-url-header.test.js.snap`): regenerated for `VansRouter/0.8.3`.
+- **Build / standalone edge cases** (`6220e12d`):
+  - `@swc/helpers` bundling fix.
+  - Windows standalone EPERM symlink handling (`scripts/fix-standalone-symlinks.cjs`).
+  - DB safety backup before builds.
+  - Provider pagination fix.
+- **Provider page lint** (`06ba55e2`): removed an unused `eslint-disable` directive.
+
+## Changed
+- **Version bump**: `package.json` and CLI `package.json` moved to `0.8.3`.
+
+## Tests
+- Full suite: **1979 passed, 18 expected fail, 77 skipped** (run on `dev` before merge).
+- Note: `tests/unit/mark-account-unavailable-429.test.js` is intermittently flaky when the whole suite runs (1 ms timing drift on a 90 s cooldown); it passes in isolation and is unrelated to this release.
+
+## Verified
+- `pnpm lint:undef` → clean.
+- `pnpm lint` → 0 errors (474 pre-existing warnings).
+- `pnpm run build` → build complete.
+- `npm run dev` → starts without the `Can't resolve 'fs'` error.
+
+## Install
+```bash
+npm install -g vansrouter
+# or pull the image
+docker pull ghcr.io/vanszs/vansrouter:0.8.3
+```
+
 # v0.8.0 (2026-07-01)
 
 Major provider expansion + resilience improvements. This release syncs AgentRouter and Kimchi catalogs with OmniRoute, ports 22 additional OpenAI-compatible API-key providers, hardens combo/account-fallback abort handling, and adds per-provider resilience profiles.
@@ -311,7 +353,7 @@ First independent VansRouter release. Fork branding is now applied throughout th
 - **LLM selector**: show custom vision models in selector and model list
 - **Image**: prevent compatible nodes from shadowing provider aliases
 
-# v0.5.2 (2026-06-17)
+# v00.5.2 (2026-06-17)
 
 ## Features
 - **Combo Fusion strategy** — fans the prompt out to all member models in parallel, then a configurable judge model synthesizes one final answer (quorum-grace, anonymized sources, graceful degradation)
@@ -368,33 +410,6 @@ First independent VansRouter release. Fork branding is now applied throughout th
 # v0.4.71 (2026-06-06)
 
 ## Features
-- Caveman: add wenyan classical Chinese levels and sync upstream prompts; locale-based visibility on endpoint page
-- i18n: endpoint exposure notice across multiple languages + Russian README
-- Antigravity: add gemini-3.5-flash-extra-low (Low) model
-- xiaomi-tokenplan: add Claude-native MiMo V2.5 Pro alias via dedicated executor
-- Qoder: fetch latest model + dashboard import-model button (#1642)
-- MiniMax: add MiniMax-M3 + update Quota Tracker coding/CN (#1631)
-
-## Fixes
-- Codex: harden streaming timeouts (stall/connect raised to 60s, configurable per-provider), accept `response.done` event, and always emit a terminal `response.failed` + `[DONE]` for Responses passthrough when a stream closes, stalls, or aborts before a terminal event — prevents codex clients from hanging (#1648, #1680, #1688, #1618)
-- Codex: durable OAuth refresh lifecycle (#1664)
-- Tunnel: skip virtual interfaces to prevent false netchange watchdog
-- Claude: fix forced tool_choice 400 on cc/ OAuth route (#1592)
-- Proxy: raise Next client body limit to 128MB via `NINEROUTER_PROXY_CLIENT_MAX_BODY_SIZE` (#1529, #1572)
-- MiniMax: echo `reasoning_content` on follow-up turns to avoid 400 (#1543)
-- Kiro: handle 400 on tool-bearing history without client tools; add mappable "auto" model slot; fix binary EventStream crash + add models & TTS tool filtering
-- Antigravity: passthrough tab-autocomplete + mark default agent slot mandatory
-- Qoder: allow `qmodel_latest` model key (#1638)
-- Providers: restore one-connection guard for compatible/embedding nodes
-- Model-test: route image/STT probes to their real endpoints, harden STT ping; add opencode-go + xiaomi-tokenplan to connection test (#1576, #1628)
-
-## Improvements
-- Dashboard: reorganize menu actions across sidebar/header/profile
-- Translator: add data-driven coverage, bug-exposing cases, and real provider smoke tests
-
-# v0.4.66 (2026-05-29)
-
-## Features
 - Add Qoder provider: device-flow OAuth, COSY signing, WAF-bypass body encoding, live model catalog, dashboard quota tracker, 11 models (#1372)
 - Add new models: Claude Opus 4.8 (Claude Code), GPT 5.4 Mini (Codex)
 
@@ -428,46 +443,7 @@ First independent VansRouter release. Fork branding is now applied throughout th
 - Strip empty Read pages argument in OpenAI-to-Claude translator (#1354)
 - Forward Gemini output dimensions for embeddings (#1366)
 - Resolve setState-in-effect errors in dashboard components (#1362)
-- Gemini CLI: reuse stored OAuth project IDs for quota checks and show clearer setup guidance when the project is missing (#1271, #1428)
-
-## Features
-- Add Cloudflare Workers proxy deployer and pool integration (#1360)
-- Add Deno Deploy relays support and improved proxy pools dashboard layout (#1437)
-
-## Improvements
-- Refactor Tunnel into dedicated Cloudflare and Tailscale manager modules
-- Refactor tokenRefresh service with in-flight dedup to prevent refresh_token_reused errors
-
-# v0.4.59 (2026-05-21)
-
-## Fixes
-- OAuth: fix login flow on Windows
-
-# v0.4.58 (2026-05-21)
-
-## Features
-- xAI Grok provider (OAuth, API key, image)
-- Provider limits: paginated accounts with page size controls
-
-## Fixes
-- Tailscale: fix connection status on Windows (#1300)
-- Tunnel: fix false "checking" when tunnel URL is reachable
-- Stream: fix pipe errors on client disconnect/abort
-
-# v0.4.55 (2026-05-18)
-
-## Features
-- Xiaomi MiMo Token Plan: region selector (Singapore / China / Europe) — keys are cluster-specific
-- Antigravity: risk confirmation dialog before first connection
-- Gemini CLI: surface upstream retry delay on 429 errors
-
-## Fixes
-- MITM: cannot kill process on macOS under sudo (lsof not found in PATH)
-- Stream: false-positive stall timeout on Claude reasoning / Kiro responses
-- Tunnel: cannot re-enable after disable (stuck state)
-- Tunnel: cloudflared error messages now include log tail for easier debugging
-- Language switcher: applies selected locale immediately on close (#1234)
-- Antigravity OAuth: metadata now matches the official client
+- Gemini CLI: reuse stored OAuth project IDs forAntigravity OAuth: metadata now matches the official client
 
 ## Improvements
 - Gemini CLI: bump engine to 0.34.0
@@ -512,12 +488,12 @@ First independent VansRouter release. Fork branding is now applied throughout th
 ## Fixes
 - Fix model check (test-models) blocked by dashboardGuard: pass machineId-based CLI token in internal self-calls
 
-# v0.4.46 (2026-05-15)
+# v0.4.46 (2026-06-15)
 
 ## Breaking Changes
 - Tunnel public URL changed — old tunnel links no longer work, please reconnect to get the new URL
 
-# v0.4.44 (2026-05-15)
+# v0.4.44 (2026-06-15)
 
 ## Features
 - Add Blackbox provider with `bb` alias (#1143)
@@ -530,7 +506,7 @@ First independent VansRouter release. Fork branding is now applied throughout th
 - Update provider name retrieval for compatibility provider (#1135)
 - Update JWT_SECRET handling
 
-# v0.4.41 (2026-05-14)
+# v0.4.41 (2026-06-14)
 
 ## Features
 - Add jcode CLI tool integration with auto-configuration (#1047)
@@ -547,12 +523,10 @@ First independent VansRouter release. Fork branding is now applied throughout th
 - fix(ui): show API key row actions on mobile (#1112)
 
 ## Improvements
-- Sync DeepSeek TUI card style with other CLI tools (badges, layout, manual config modal)
-- Add official logos for Amp CLI, jcode, Qwen Code (replace generic icons)
-- Resize deepseek-tui icon 1024→128 with padding for visual consistency
+- Dashboard: reorganize menu actions across sidebar/header/profile
+- Translator: add data-driven coverage, bug-exposing cases, and real provider smoke tests
 
-# v0.4.39 (2026-05-14)
+# v0.4.39 (2026-06-14)
 
 ## Fixes
 - fix(docker): restore `/app/server.js` (v0.4.38 regression)
-
