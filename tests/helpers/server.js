@@ -1,6 +1,7 @@
 import { execSync, spawn } from "child_process";
 import { proxyAwareFetch } from "../../open-sse/utils/proxyFetch.js";
 import crypto from "node:crypto";
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -73,6 +74,13 @@ export async function ensureTestServer() {
   const startedAt = Date.now();
   while (Date.now() - startedAt < STARTUP_TIMEOUT_MS) {
     if (await isServerReady()) {
+      // Force the server to initialize its DB (migrations run lazily on first DB access).
+      // A protected route that hits the auth/DB layer is required.
+      try {
+        await fetch(`${BASE}/v1/models/image`, { headers: { Authorization: "Bearer seed-trigger" } });
+      } catch {
+        // ignore; failure still triggers auth → DB init path in most builds
+      }
       await seedTestApiKey(env.DATA_DIR);
       return;
     }
@@ -83,15 +91,39 @@ export async function ensureTestServer() {
 }
 
 async function seedTestApiKey(dataDir) {
+  const { DatabaseSync } = await import("node:sqlite");
+  const dbDir = path.join(dataDir, "db");
+  fs.mkdirSync(dbDir, { recursive: true });
+  const dbPath = path.join(dbDir, "data.sqlite");
+
+  // Wait for the server to finish DB migrations so the apiKeys table exists.
+  const startedAt = Date.now();
+  let db;
+  while (Date.now() - startedAt < 15000) {
+    try {
+      if (db) db.close();
+      db = new DatabaseSync(dbPath);
+      const table = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='apiKeys'").get();
+      if (table) break;
+    } catch {
+      // file may not exist yet
+    }
+    await new Promise((r) => setTimeout(r, 200));
+  }
+
+  if (!db) {
+    console.warn("[test-server] failed to seed API key: database did not open");
+    return;
+  }
+
   try {
-    const { DatabaseSync } = await import("node:sqlite");
-    const db = new DatabaseSync(path.join(dataDir, "db/data.sqlite"));
     db.prepare(
       "INSERT OR REPLACE INTO apiKeys(id, key, name, machineId, isActive, createdAt, allowedProviders, allowedCombos, allowedKinds) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).run("test-key-1", TEST_API_KEY, "CI Test Key", "ci", 1, new Date().toISOString(), null, null, null);
-    db.close();
   } catch (err) {
     console.warn("[test-server] failed to seed API key:", err.message);
+  } finally {
+    db.close();
   }
 }
 
