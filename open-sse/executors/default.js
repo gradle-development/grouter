@@ -8,6 +8,7 @@ import { proxyAwareFetch } from "../utils/proxyFetch.js";
 import { injectReasoningContent } from "../utils/reasoningContentInjector.js";
 import { stripUnsupportedParams } from "../translator/concerns/paramSupport.js";
 import { getCapabilitiesForModel } from "../providers/capabilities.js";
+import { randomUUID } from "node:crypto";
 
 // Auth header descriptors — derived from registry transport.auth, fallback to hardcoded defaults.
 const BEARER = { combined: true, header: "Authorization", scheme: "bearer" };
@@ -317,6 +318,26 @@ export class DefaultExecutor extends BaseExecutor {
     }
 
     if (stream && !this.config.preserveAccept) headers["Accept"] = "text/event-stream";
+    // Keep the legacy public DefaultExecutor contract for callers/tests that
+    // instantiate it directly. Runtime routing uses CodeBuddyGlobalExecutor.
+    if (this.provider === "codebuddy") {
+      const requestId = randomUUID().replace(/-/g, "");
+      const conversationId = randomUUID().replace(/-/g, "");
+      Object.assign(headers, {
+        "Content-Type": "application/json; charset=utf-8",
+        "X-Stainless-Runtime": "node",
+        "X-Stainless-Lang": "js",
+        "X-Stainless-Helper-Method": "stream",
+        "X-Stainless-Retry-Count": "0",
+        "X-Request-ID": requestId,
+        "X-Conversation-ID": conversationId,
+        "X-Conversation-Request-ID": conversationId,
+        "X-Conversation-Message-ID": requestId,
+        "X-Agent-Intent": "craft",
+        "X-Private-Data": "false",
+        "X-Domain": credentials.providerSpecificData?.domain || "www.codebuddy.ai",
+      });
+    }
     return headers;
   }
 

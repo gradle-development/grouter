@@ -1231,7 +1231,7 @@ export default function ProviderDetailPage() {
     if (isAnthropicCompatible) {
       return "/providers/anthropic-m.png";
     }
-    return `/providers/${providerInfo.id}.png`;
+    return providerInfo.id === "autoclaw" ? "/providers/autoclaw.webp?v=2" : `/providers/${providerInfo.id}.webp`;
   };
 
   return (

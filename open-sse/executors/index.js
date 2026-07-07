@@ -1,4 +1,5 @@
 import { AntigravityExecutor } from "./antigravity.js";
+import { AutoclawExecutor } from "./autoclaw.js";
 import { AzureExecutor } from "./azure.js";
 import { GeminiCLIExecutor } from "./gemini-cli.js";
 import { GithubExecutor } from "./github.js";
@@ -20,10 +21,12 @@ import { XiaomiTokenplanExecutor } from "./xiaomi-tokenplan.js";
 import { MimoFreeExecutor } from "./mimo-free.js";
 import { ZcodeExecutor } from "./zcode.js";
 import { CodeBuddyExecutor } from "./codebuddy-cn.js";
+import { CodeBuddyGlobalExecutor } from "./codebuddy.js";
 import { DefaultExecutor } from "./default.js";
 
 const executors = {
   antigravity: new AntigravityExecutor(),
+  autoclaw: new AutoclawExecutor(),
   azure: new AzureExecutor(),
   "gemini-cli": new GeminiCLIExecutor(),
   github: new GithubExecutor(),
@@ -51,6 +54,7 @@ const executors = {
   zcode: new ZcodeExecutor(),
   zc: new ZcodeExecutor(), // Alias for zcode
   "codebuddy-cn": new CodeBuddyExecutor(),
+  codebuddy: new CodeBuddyGlobalExecutor(),
 };
 
 const defaultCache = new Map();
@@ -67,6 +71,7 @@ export function hasSpecializedExecutor(provider) {
 
 export { BaseExecutor } from "./base.js";
 export { AntigravityExecutor } from "./antigravity.js";
+export { AutoclawExecutor } from "./autoclaw.js";
 export { AzureExecutor } from "./azure.js";
 export { GeminiCLIExecutor } from "./gemini-cli.js";
 export { GithubExecutor } from "./github.js";
@@ -89,3 +94,4 @@ export { XiaomiTokenplanExecutor } from "./xiaomi-tokenplan.js";
 export { MimoFreeExecutor } from "./mimo-free.js";
 export { ZcodeExecutor } from "./zcode.js";
 export { CodeBuddyExecutor } from "./codebuddy-cn.js";
+export { CodeBuddyGlobalExecutor } from "./codebuddy.js";

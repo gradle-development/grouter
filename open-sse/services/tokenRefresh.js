@@ -14,6 +14,7 @@ import {
   refreshCodebuddyToken,
   classifyOAuthRefreshError,
 } from "./tokenRefresh/providers.js";
+import { refreshAutoclawToken } from "./tokenRefresh/autoclaw.js";
 
 // Re-export all provider refresh functions (preserves public API for all consumers)
 export {
@@ -27,6 +28,7 @@ export {
   refreshGitHubToken,
   refreshCopilotToken,
   refreshCodebuddyToken,
+  refreshAutoclawToken,
   classifyOAuthRefreshError,
 };
 
@@ -128,11 +130,13 @@ const REFRESH_HANDLERS = {
   iflow: (c, log) => refreshIflowToken(c.refreshToken, log),
   github: (c, log) => refreshGitHubToken(c.refreshToken, log),
   kiro: (c, log) => refreshKiroToken(c.refreshToken, c.providerSpecificData, log),
+  autoclaw: (c, log) => refreshAutoclawToken(c, log),
   xai: (c, log) => refreshXaiToken(c.refreshToken, log),
   // Grok CLI shares xAI OAuth client + token endpoint (device-code tokens refresh the same way)
   "grok-cli": (c, log) => refreshXaiToken(c.refreshToken, log),
   gcli: (c, log) => refreshXaiToken(c.refreshToken, log),
   "codebuddy-cn": (c, log) => refreshCodebuddyToken(c.refreshToken, log),
+  codebuddy: (c, log) => refreshCodebuddyToken(c.refreshToken, log, "codebuddy"),
   vertex: vertexRefreshHandler,
   "vertex-partner": vertexRefreshHandler
 };
