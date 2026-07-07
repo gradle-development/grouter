@@ -56,43 +56,49 @@
 
 ### Logic & Backend — what each has
 
-| Feature | 9Router | OmniRoute | **VansRoute** |
-|---------|---------|-----------|---------------|
-| **Circuit breaker** | ❌ | ✅ TypeScript + DB persistence | ✅ JS, in-memory (no DB dependency) |
-| **Account semaphore** | ❌ | ✅ TypeScript | ✅ JS, ported + proxy-aware |
-| **Provider-level failure tracking** | ❌ | ✅ with 5s dedup | ✅ ported, with dedup bound 10K |
-| **Provider exhaustion detection** | ❌ | ✅ `isProviderExhaustedReason()` | ✅ ported + tightened regex |
-| **429 excluded from breaker** | ❌ N/A | ❌ (429 counts) | ✅ Only 5xx/timeout counts |
-| **Proxy-aware resilience** | ❌ | ❌ | ✅ per-proxy breaker + semaphore |
-| **Kimchi CLI alignment** | ❌ | ❌ | ✅ 5 models, per-model caps from models.dev |
-| **Kimchi quota auto-reactivation** | ❌ | ❌ | ✅ monthly auto-reset via instrumentation hook |
-| **AgentRouter provider** | ❌ | ✅ | ✅ |
-| **Model lockout** | ✅ DB flat field | ✅ in-memory Map | ✅ DB flat field (inherited) |
-| **RTK + Caveman + Ponytail** | ✅ | ✅ | ✅ inherited |
-| **NVIDIA Kimi stream coercion** | ✅ | ✅ | ✅ inherited |
-| **Per-API-key ACL** | ✅ fork-only | ❌ | ✅ inherited |
-| **Format translation** | ✅ OpenAI↔Claude↔Gemini↔Kiro | ✅ | ✅ inherited |
-| **Kimi native tool parser** | ✅ | ✅ | ✅ inherited + hardened |
-| **Combo strategies** | 4 (fallback/RR/fusion/capacity) | 17 | 4 (inherited) |
-| **Settings cache (TPS)** | ❌ (3 sync DB reads/req) | ❌ | ✅ 5s TTL cache |
-| **Connections cache (TPS)** | ❌ (1 sync DB read/req) | ❌ | ✅ 2s TTL cache + invalidation |
-| **Per-provider mutex** | ❌ (global mutex) | ❌ | ✅ per-provider parallel selection |
-| **Provider count** | 40+ | 231+ | 40+ + AgentRouter |
+| Capability | 9Router | OmniRoute | **VansRoute** |
+|---|---|---|---|
+| **Resilience engine: circuit breaker** | ❌ | ✅ TypeScript + DB-backed persistence | ✅ In-memory JS state machine (CLOSED→DEGRADED→OPEN→HALF_OPEN), no DB dependency |
+| **Resilience engine: account semaphore** | ❌ | ✅ TypeScript FIFO queue | ✅ JS account-level FIFO queue with capacity errors, queue draining, and runtime stats |
+| **Provider failure tracking** | ❌ | ✅ 5s dedup window | ✅ Deduplicated failure recording with bounded 10K entry map + automatic cooldown |
+| **Intelligent breaker classification** | ❌ N/A | ❌ 429 counts toward breaker | ✅ Only 5xx/timeout/network errors trip the breaker; 429 is treated as account-level rate-limit |
+| **Proxy-aware resilience** | ❌ | ❌ | ✅ Circuit breaker, semaphore, and account fallback all keyed by `provider:account:proxyHash` so one dead proxy never blocks others |
+| **Proxy-aware HTTP layer** | ❌ | ❌ | ✅ Proxy resolution, hashing, no-proxy bypass, and env-proxy normalization built into the fetch path |
+| **Account fallback & cooldown** | ❌ | ✅ | ✅ Quota-exhaustion detection, provider cooldown, and breaker-aware fallback in one pipeline |
+| **Credential lifecycle automation** | ❌ | ❌ | ✅ OAuth refresh scheduler with stale detection, refreshed-credential merging, and expiry tracking |
+| **API-key ACL (multi-tenant)** | ✅ providers only | ❌ | ✅ Per-key ACL for providers, combos, and service kinds; enforced in auth + model resolution |
+| **Universal format translator** | ✅ OpenAI↔Claude↔Gemini↔Kiro | ✅ | ✅ Bidirectional request/response translation with unified thinking/reasoning extraction |
+| **Provider-agnostic SSE streaming core** | ✅ | ✅ | ✅ Shared base executor, SSE frame parsing, NDJSON wrapping, and stream-error normalization |
+| **Loop-guard & protocol prompts** | ❌ | ❌ | ✅ Detects infinite tool loops and injects termination/tool-protocol prompts |
+| **Token compression pipeline** | ✅ RTK | ✅ RTK + Caveman | ✅ RTK + Caveman + Ponytail + Headroom, injected before translation |
+| **Combo routing strategies** | 4 (fallback / round-robin / fusion / capacity) | 17 strategies | 4 inherited strategies (fallback / round-robin / fusion / capacity) |
+| **Settings hot-cache** | ❌ 3 sync DB reads per request | ❌ | ✅ 5s TTL in-memory cache eliminates repeated settings reads |
+| **Connections hot-cache** | ❌ 1 sync DB read per request | ❌ | ✅ 2s TTL in-memory cache with write-time invalidation |
+| **Per-provider parallel selection** | ❌ global mutex | ❌ | ✅ Per-provider mutex allows concurrent credential selection across different providers |
+| **Model lockout / rate-limit gating** | ✅ DB flat field | ✅ in-memory Map | ✅ DB flat field with inherited lockout logic |
+| **Usage tracking & estimation** | ✅ basic | ✅ | ✅ Token usage normalization, input/output estimation, and buffered usage logging |
+| **Structured error mapping** | ✅ | ✅ | ✅ Central error config, provider-specific messages, OpenAI-format error bodies, and retry-after parsing |
+| **Runtime-adaptive SQLite backend** | ✅ better-sqlite3 only | ❌ | ✅ Auto-selects better-sqlite3 / Bun / node:sqlite / sql.js depending on runtime |
+| **Database migration engine** | ✅ | ✅ | ✅ Versioned migrations, schema sync, legacy import, and automatic backups |
+| **Instrumentation hooks** | ❌ | ❌ | ✅ Next.js instrumentation hook schedules periodic background reactivation tasks |
+| **Dashboard & API middleware** | ✅ basic | ✅ | ✅ Dashboard guard, public-LLM-API access control, and real-client-IP extraction |
+| **Provider registry pluggability** | ✅ static JS registry | ✅ static JS registry | ✅ Registry per provider + capability/alias/ACL catalog |
+| **Provider breadth** | 40+ | 231+ | 40+ |
 
 ### What VansRoute has that neither 9Router nor OmniRoute has
 
-1. **Kimchi CLI alignment** — 9router's Kimchi provider masquerades as the official Kimchi CLI, with exactly the same 5 models, capabilities, and temperature rules
-2. **Kimchi quota auto-reactivation** — accounts deactivated due to quota exhaustion automatically reactivate at the 1st of each month
-3. **In-memory circuit breaker without DB** — simpler than OmniRoute's DB-backed version, no `domainState.js` dependency
-4. **Proxy-aware resilience** — circuit breaker and semaphore keyed per `provider:proxyHash` so one dead proxy doesn't block others
-5. **TPS optimization** — cached settings + cached connections + per-provider mutex = fewer sync DB reads per request
+1. **Zero-DB resilience stack** — circuit breaker + account semaphore + failure tracking run entirely in-memory, removing the `domainState.js`/DB dependency found in OmniRoute.
+2. **Proxy-aware everything** — breaker, semaphore, account fallback, and HTTP fetch are all keyed by proxy hash, so a dead proxy isolates itself instead of taking the whole provider down.
+3. **Dual hot-cache + per-provider parallelism** — settings cache (5s TTL) + connections cache (2s TTL with invalidation) + per-provider mutex = far fewer synchronous DB reads per request than 9Router's global-mutex approach.
+4. **Credential lifecycle automation** — built-in OAuth refresh scheduler, stale-credential detection, and refreshed-token merging keep long-lived connections alive without manual reconnection.
+5. **Loop-guard & protocol prompt injection** — detects repetitive tool-call loops and injects termination/tool-protocol prompts to nudge models toward clean completion.
 
 ### What VansRoute does NOT have (yet)
 
 - OmniRoute's 17 combo strategies (VansRoute has 4)
 - OmniRoute's `sessionPool` with fingerprint rotation
 - OmniRoute's `autoCombo` with complexity routing and task fitness scoring
-- OmniRoute's 231 providers (VansRoute has 40+)
+- OmniRoute's broader provider registry (231 vs 40+)
 
 ---
 
@@ -749,6 +755,14 @@ VansRouter/
 ## 📧 Support
 
 - **GitHub Issues**: [Vanszs/VansRouter/issues](https://github.com/Vanszs/VansRouter/issues)
+
+---
+
+## 👥 Contributors
+
+Thanks to all contributors who helped make VansRoute better!
+
+[![Contributors](https://contrib.rocks/image?repo=Vanszs/VansRouter&max=150&columns=15&anon=1)](https://github.com/Vanszs/VansRouter/graphs/contributors)
 
 ---
 
