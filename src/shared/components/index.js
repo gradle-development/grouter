@@ -42,6 +42,7 @@ export const BulkAccountAutomationModal = lazyModal(() => import("./BulkAccountA
 export const CodeBuddyCnPhoneAutomationModal = lazyModal(() => import("./CodeBuddyCnPhoneAutomationModal"));
 export const AutoclawAutomationModal = lazyModal(() => import("./AutoclawAutomationModal"));
 export const CloudflareTokenImportModal = lazyModal(() => import("./CloudflareTokenImportModal"));
+export const CloudflareDisposableImportModal = lazyModal(() => import("./CloudflareDisposableImportModal"));
 
 export { default as UsageStats } from "./UsageStats";
 export { default as LanguageSwitcher } from "./LanguageSwitcher";

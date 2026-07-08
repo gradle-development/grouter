@@ -320,11 +320,16 @@ async function defaultSocialExchange(args) {
 const BULK_IMPORT_DEFAULT_NAVIGATION_TIMEOUT_MS = 120_000; // 2 minutes
 const BULK_IMPORT_DEFAULT_TIMEOUT_MS = 60_000; // 1 minute
 
-export async function createFreshContext(browser, { locale = "en-US" } = {}) {
+export async function createFreshContext(browser, { locale = "en-US", engine } = {}) {
+  const isCloak = engine === "cloakbrowser";
   const context = await browser.newContext({
-    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    viewport: { width: 1280, height: 800 },
-    locale,
+    // CloakBrowser handles UA/viewport/locale via binary flags (undetectable).
+    // Setting them via CDP overrides cloakbrowser's stealth patches.
+    ...(isCloak ? {} : {
+      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      viewport: { width: 1280, height: 800 },
+      locale,
+    }),
     // Context-level defaults — inherited by every page created from this context.
     // Playwright supports these in BrowserContextOptions since v1.x.
     defaultNavigationTimeout: BULK_IMPORT_DEFAULT_NAVIGATION_TIMEOUT_MS,

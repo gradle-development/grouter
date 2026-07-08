@@ -147,6 +147,10 @@ export const BULK_IMPORT_PROVIDERS = Object.freeze({
       proxyPoolId: resolvedProxy.proxyPoolId,
       proxySource: resolvedProxy.proxySource,
       randomizeProxySession: body?.randomizeProxySession,
+      mailApi: body?.mailApi,
+      mailDomains: body?.mailDomains,
+      signupMode: body?.signupMode,
+      mailProvider: body?.mailProvider,
     }),
   },
 });
