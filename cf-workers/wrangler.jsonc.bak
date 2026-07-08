@@ -1,0 +1,13 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+  "name": "9router-email-inbox",
+  "main": "email-inbox-worker.js",
+  "compatibility_date": "2025-01-01",
+  "observability": { "enabled": true },
+  "kv_namespaces": [
+    { "binding": "INBOX", "id": "", "preview_id": "" }
+  ],
+  "vars": {
+    "DOMAIN": ""
+  }
+}

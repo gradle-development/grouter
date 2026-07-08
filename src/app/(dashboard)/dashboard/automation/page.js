@@ -7,6 +7,7 @@ import {
   BulkAccountAutomationModal,
   Card,
   CardSkeleton,
+  CloudflareDisposableImportModal,
   CloudflareTokenImportModal,
   CodeBuddyCnPhoneAutomationModal,
   KiroOAuthWrapper,
@@ -553,6 +554,7 @@ function AutoclawAutomationPanel({ onRefresh }) {
 function CloudflareAutomationPanel({ onRefresh }) {
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [isTokenOpen, setIsTokenOpen] = useState(false);
+  const [isDisposableOpen, setIsDisposableOpen] = useState(false);
 
   return (
     <>
@@ -575,6 +577,15 @@ function CloudflareAutomationPanel({ onRefresh }) {
             subtitle="Paste apiToken|accountId to verify the token, test Workers AI access, and save the connection. No browser needed."
           />
         </button>
+        <button type="button" onClick={() => setIsDisposableOpen(true)} className="text-left">
+          <Card
+            hover
+            padding="md"
+            icon="alternate_email"
+            title="Disposable Email Signup"
+            subtitle="Generate temp emails, sign up for new Cloudflare accounts, create Workers AI API tokens, and save connections — all automated via browser. Based on bluk-cf flow."
+          />
+        </button>
       </div>
 
       <BulkAccountAutomationModal
@@ -589,6 +600,11 @@ function CloudflareAutomationPanel({ onRefresh }) {
         isOpen={isTokenOpen}
         onSuccess={onRefresh}
         onClose={() => setIsTokenOpen(false)}
+      />
+      <CloudflareDisposableImportModal
+        isOpen={isDisposableOpen}
+        onSuccess={onRefresh}
+        onClose={() => setIsDisposableOpen(false)}
       />
     </>
   );
@@ -641,7 +657,7 @@ const AUTOMATION_PROVIDERS = [
     label: "Cloudflare AI",
     icon: "cloud",
     description: "Register/login via Google, create Workers AI API tokens, verify access, and import existing tokens.",
-    supportedModes: ["google-register", "cloudflare-login", "token-import", "workers-ai-test"],
+    supportedModes: ["google-register", "cloudflare-login", "token-import", "workers-ai-test", "bluk-cf-import"],
     component: CloudflareAutomationPanel,
   },
 ];

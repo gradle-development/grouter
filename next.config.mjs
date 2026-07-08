@@ -67,6 +67,11 @@ const nextConfig = {
       aggregateTimeout: 300,
       ignored: /[\\/](node_modules|\.git|logs|\.next|\.next-cli-build|gitbook|cli|open-sse\.old|tests|docs)[\\/]/,
     };
+    // Disable webpack persistent cache in dev — forces full rebuild on every
+    // change, avoiding stale cache problems that require manual .next/ cleanup.
+    if (process.env.NODE_ENV === "development") {
+      config.cache = false;
+    }
     return config;
   },
   async rewrites() {

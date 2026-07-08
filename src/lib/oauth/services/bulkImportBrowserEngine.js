@@ -306,9 +306,10 @@ async function launchCloakBrowser({ proxyUrl, headless = true, args = [] } = {})
   const cloakbrowser = await loadRuntimeCloakBrowser(runtime);
   const launcher = cloakbrowser?.launch || cloakbrowser?.default?.launch || cloakbrowser?.chromium?.launch;
   if (!launcher) throw Object.assign(new Error("cloakbrowser loaded but no launch() API is available"), { code: "CLOAKBROWSER_API_MISMATCH" });
-  const options = { headless };
+  const options = { headless, humanize: true, geoip: true };
   const finalArgs = buildProxyBypassArgs(proxyUrl, args);
-  if (finalArgs.length) options.args = finalArgs;
+  const stealthArgs = ['--enable-blink-features=FakeShadowRoot'];
+  options.args = [...stealthArgs, ...finalArgs];
   const proxy = buildBrowserProxyOption(proxyUrl);
   if (proxy) options.proxy = proxy;
   return launcher(options);
