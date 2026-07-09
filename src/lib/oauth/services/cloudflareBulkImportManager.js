@@ -855,14 +855,14 @@ async function isTurnstilePassed(page, onStep) {
         if (dt && dt.length > 10) return { src: "iframe", val: dt.slice(0, 20) };
       }
       // 3. turnstile.getResponse() — try without ID, then with all widget IDs
-      if (typeof turnstile !== "undefined" && typeof turnstile.getResponse === "function") {
-        const r = turnstile.getResponse();
+      if (typeof window !== "undefined" && typeof window.turnstile !== "undefined" && typeof window.turnstile.getResponse === "function") {
+        const r = window.turnstile.getResponse();
         if (r && r.length > 10) return { src: "api", val: r.slice(0, 20) };
         const widgets = document.querySelectorAll('[data-widget-id]');
         for (const w of widgets) {
           const id = w.getAttribute("data-widget-id");
           if (id) {
-            const r2 = turnstile.getResponse(id);
+            const r2 = window.turnstile.getResponse(id);
             if (r2 && r2.length > 10) return { src: "api:" + id, val: r2.slice(0, 20) };
           }
         }
