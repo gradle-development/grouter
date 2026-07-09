@@ -20,8 +20,11 @@ function signHeaders(extra = {}) {
     "x-auth-timestamp": ts,
     "x-auth-sign": sign,
     "x-product": "autoclaw",
-    "x-version": "1.9.1",
-    "x-tm": "win",
+    "x-version": "1.11.3",
+    "x-tm": "web",
+    "x-channel": "official",
+    "x-client-type": "web",
+    "x-lang": "zh-CN",
     "x-trace-id": crypto.randomUUID(),
     ...extra,
   };
@@ -56,8 +59,12 @@ export class AutoclawExecutor extends DefaultExecutor {
     return signHeaders(extras);
   }
 
+  // Proxy routes via X-Request-Model header — omit model from body to avoid
+  // misleading "非法模型" error on 0-balance accounts (proxy returns proper
+  // "积分不足" when body lacks model field).
   transformRequest(model, body, _stream, _credentials) {
-    return { ...body, stream: true, model: "x" };
+    const { model: _, ...rest } = body;
+    return { ...rest, stream: true };
   }
 
   async execute(args) {

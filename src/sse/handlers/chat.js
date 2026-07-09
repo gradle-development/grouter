@@ -14,6 +14,8 @@ import {
 import {
   isKimchiQuotaExhausted,
   buildKimchiQuotaExhaustedUpdate,
+  isAutoclawInsufficientBalance,
+  buildAutoclawBalanceExhaustedUpdate,
   detectDailyQuotaExhaustion,
   buildDailyQuotaLockUpdate,
   isProviderInCooldown,
@@ -495,6 +497,18 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
         log.warn("AUTH", `Kimchi quota exhausted: deactivated ${credentials.connectionName || credentials.connectionId} until ${update.rateLimitedUntil}`);
       } catch (e) {
         log.error("AUTH", `Failed to deactivate Kimchi account on quota exhausted: ${e.message}`);
+      }
+      // Fall through to fallback behavior — the next account or provider will be tried.
+    }
+
+    // Autoclaw balance exhausted: deactivate the account (points depleted, no auto-reset).
+    if (isAutoclawInsufficientBalance(provider, errorText)) {
+      try {
+        const update = buildAutoclawBalanceExhaustedUpdate();
+        await updateProviderConnection(credentials.connectionId, update);
+        log.warn("AUTH", `Autoclaw balance exhausted: deactivated ${credentials.connectionName || credentials.connectionId} (recharge needed)`);
+      } catch (e) {
+        log.error("AUTH", `Failed to deactivate autoclaw account on balance exhausted: ${e.message}`);
       }
       // Fall through to fallback behavior — the next account or provider will be tried.
     }
