@@ -20,6 +20,13 @@ const FORMAT_TO_NATIVE = {
   kiro: "kiro",
 };
 
+// Strip a trailing thinking suffix "model(value)" → "model" (no-op when absent).
+export function stripThinkingSuffix(model) {
+  if (typeof model !== "string") return model;
+  const m = model.match(/^(.*)\([^()]+\)\s*$/);
+  return m ? m[1].trim() : model;
+}
+
 // Parse model-name suffix "model(value)" → { cleanModel, override }.
 // value: level name (high) | number (8192) | auto | none. null override when absent.
 export function parseSuffix(model) {
@@ -177,8 +184,7 @@ function applyFormat(fmt, body, cfg, caps) {
     case "openai": {
       if (none && canDisable) { body.reasoning_effort = "none"; break; }
       const level = toLevel(eff);
-      // Vercel / OpenAI Chat Completions only accept "none|minimal|low|medium|high|xhigh"
-      // for reasoning.effort. Internal "max" maps to "xhigh". Drop unknown levels.
+      // OpenAI reasoning_effort enum caps at "xhigh" (no "max"); clamp Claude Code's "max".
       if (level) body.reasoning_effort = level === "max" ? "xhigh" : level;
       break;
     }
@@ -227,7 +233,7 @@ function applyFormat(fmt, body, cfg, caps) {
       break;
     }
     case "kimi": {
-      if (none && canDisable) { body.reasoning_effort = "none"; break; }
+      if (none && canDisable) { body.thinking = { type: "disabled" }; break; }
       const effort = toKimiReasoningEffort(eff);
       if (effort) body.reasoning_effort = effort;
       break;
@@ -273,17 +279,10 @@ export function applyThinking(targetFormat, model, body, provider = null, intent
     stripAll(body);
     return body;
   }
-
-  // AgentRouter proxies GLM-5.x through a Claude-format transport, but the
-  // upstream GLM-5.x defaults thinking ON when no reasoning config is sent.
-  // If the client did not explicitly request reasoning, force-disable it so
-  // reasoning content does not leak into the OpenAI-format response.
-  // Scoped to agentrouter only — native glm/Z.ai should not be affected.
-  const effectiveCfg = cfg || (provider === "agentrouter" && /^glm-5/i.test(cleanModel) && caps.thinkingCanDisable !== false ? { mode: "none" } : null);
-  if (!effectiveCfg) return body;
+  if (!cfg) return body;
 
   const fmt = resolveFormat(targetFormat, cleanModel, provider);
   stripAll(body);
-  applyFormat(fmt, body, effectiveCfg, caps);
+  applyFormat(fmt, body, cfg, caps);
   return body;
 }
