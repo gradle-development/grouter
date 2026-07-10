@@ -87,6 +87,19 @@ export class AutoclawBulkImportManager extends KiroBulkImportManager {
     return this._processAccountPythonRetry(job, account, workerId);
   }
 
+  async cancelJob(jobId) {
+    const job = this.jobs.get(jobId);
+    if (job?._pythonChildren) {
+      for (const child of job._pythonChildren.values()) {
+        if (child && !child.killed && child.exitCode === null) {
+          child.kill("SIGTERM");
+        }
+      }
+      job._pythonChildren.clear();
+    }
+    return super.cancelJob(jobId);
+  }
+
   async _processAccountPythonRetry(job, account, workerId) {
     let currentProxyUrl = job.proxyUrl || null;
 
@@ -158,8 +171,8 @@ export class AutoclawBulkImportManager extends KiroBulkImportManager {
         args,
         { cwd: SCRIPT_DIR, env, timeout: TIMEOUT_MS, maxBuffer: 1024 * 1024 },
         (err, stdout, stderr) => {
+          // Residual stderr — catch any lines missed by streaming
           if (stderr) {
-            // Parse step progress from stderr for live reporting
             for (const line of String(stderr).split("\n")) {
               const match = line.match(/\[(\w+)\]\s+(.+)/);
               if (match) {
@@ -179,7 +192,21 @@ export class AutoclawBulkImportManager extends KiroBulkImportManager {
         }
       );
 
-      // Cancel on job abort — sends SIGTERM to python, cleanup handled by Python's finally block
+      // Real-time stderr streaming for live activity log
+      let stderrBuf = "";
+      child.stderr.setEncoding("utf8");
+      child.stderr.on("data", (chunk) => {
+        stderrBuf += chunk;
+        const lines = stderrBuf.split("\n");
+        stderrBuf = lines.pop() || ""; // keep incomplete last line
+        for (const line of lines) {
+          const match = line.match(/\[(\w+)\]\s+(.+)/);
+          if (match) {
+            this.setAccountStep(account, match[1], match[2].trim());
+          }
+        }
+      });
+
       const cancelKey = `python-${account.line ?? account.email}`;
       job._pythonChildren = job._pythonChildren || new Map();
       job._pythonChildren.set(cancelKey, child);

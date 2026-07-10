@@ -8,8 +8,14 @@ import asyncio
 import base64
 import math
 import random
+import sys
 import time
 from dataclasses import dataclass, field
+from typing import Any
+
+
+def _clog(*args: Any, **kwargs: Any) -> None:
+    print(*args, file=sys.stderr, flush=True, **kwargs)
 
 
 SHUMEI_SELECTORS = {
@@ -190,10 +196,10 @@ async def compute_distance(page) -> dict | None:
 
     elapsed = (_time.monotonic() - t0) * 1000
     if not result or result["bestX"] <= 0:
-        print(f"[Captcha] NCC returned {result.get('bestX') if result else None} ({elapsed:.0f}ms) — no match")
+        _clog(f"[Captcha] NCC returned {result.get('bestX') if result else None} ({elapsed:.0f}ms) — no match")
         return None
 
-    print(f"[Captcha] NCC bestX={result['bestX']} bg={result['bgW']}x{result['bgH']} ({elapsed:.0f}ms)")
+    _clog(f"[Captcha] NCC bestX={result['bestX']} bg={result['bgW']}x{result['bgH']} ({elapsed:.0f}ms)")
     return result
 
 
@@ -259,7 +265,7 @@ async def drag_slider(page, distance: float, original_width: int) -> bool:
     img_box = await bg_img.bounding_box()
 
     if not slider_box or not wrapper_box or not img_box:
-        print("[Captcha] Slider or wrapper not visible")
+        _clog("[Captcha] Slider or wrapper not visible")
         return False
 
     start_x = slider_box["x"] + slider_box["width"] / 2
@@ -268,7 +274,7 @@ async def drag_slider(page, distance: float, original_width: int) -> bool:
     image_scale = img_box["width"] / original_width
     target_distance = min(track_width, distance * image_scale)
 
-    print(f"[Captcha] slider=({slider_box['x']:.0f},{slider_box['y']:.0f}) "
+    _clog(f"[Captcha] slider=({slider_box['x']:.0f},{slider_box['y']:.0f}) "
           f"track={track_width:.0f}px scale={image_scale:.3f} target={target_distance:.0f}px")
 
     trace_result = get_trace(target_distance, backtrack=False)
@@ -305,7 +311,7 @@ async def drag_slider(page, distance: float, original_width: int) -> bool:
     deadline = time.time() + 8
     while time.time() < deadline:
         if len(page.context.pages) > pages_before:
-            print("[Captcha] Solved — new popup opened")
+            _clog("[Captcha] Solved — new popup opened")
             return True
         gone = await page.evaluate(
             """() => {
@@ -314,23 +320,23 @@ async def drag_slider(page, distance: float, original_width: int) -> bool:
             }"""
         )
         if gone:
-            print("[Captcha] Solved — wrapper gone")
+            _clog("[Captcha] Solved — wrapper gone")
             return True
         await asyncio.sleep(0.25)
 
-    print("[Captcha] Verification timeout")
+    _clog("[Captcha] Verification timeout")
     return False
 
 
 async def solve_shumei_captcha(page, timeout: int = CAPTCHA_WAIT_TIMEOUT) -> bool:
     """Detect and solve the Shumei captcha (slider or icon-select variant)."""
-    print("[Captcha] Starting solve")
+    _clog("[Captcha] Starting solve")
 
     try:
         await page.wait_for_selector(SHUMEI_SELECTORS["wrapper"], timeout=timeout)
-        print("[Captcha] Wrapper found")
+        _clog("[Captcha] Wrapper found")
     except Exception:
-        print("[Captcha] Wrapper not found within timeout")
+        _clog("[Captcha] Wrapper not found within timeout")
         return False
 
     await asyncio.sleep(0.5)
@@ -338,12 +344,12 @@ async def solve_shumei_captcha(page, timeout: int = CAPTCHA_WAIT_TIMEOUT) -> boo
     # Check if icon-select variant is present
     icon_tips = await page.query_selector(SHUMEI_ICON_SELECTORS["wrapper"])
     if icon_tips:
-        print("[Captcha] Icon-select variant detected")
+        _clog("[Captcha] Icon-select variant detected")
         return await _solve_icon_select(page)
 
     result = await compute_distance(page)
     if not result or result["bestX"] <= 0:
-        print(f"[Captcha] Distance invalid: {result}")
+        _clog(f"[Captcha] Distance invalid: {result}")
         return False
 
     return await drag_slider(page, result["bestX"], result["bgW"])
@@ -355,7 +361,7 @@ async def _solve_icon_select(page) -> bool:
     import numpy as np
     import cv2
 
-    print("[Captcha-Icon] Downloading images")
+    _clog("[Captcha-Icon] Downloading images")
 
     try:
         bg_data_url, fg_data_url = await asyncio.gather(
@@ -363,7 +369,7 @@ async def _solve_icon_select(page) -> bool:
             _download_image(page, SHUMEI_ICON_SELECTORS["fg"], "icon_fg"),
         )
     except Exception as e:
-        print(f"[Captcha-Icon] Image download failed: {e}")
+        _clog(f"[Captcha-Icon] Image download failed: {e}")
         # Dump relevant DOM for debugging
         try:
             html = await page.evaluate(
@@ -379,14 +385,14 @@ async def _solve_icon_select(page) -> bool:
                     }));
                 }"""
             )
-            print(f"[Captcha-Icon] DOM dump: {html}")
+            _clog(f"[Captcha-Icon] DOM dump: {html}")
         except Exception:
             pass
         return False
 
     bg_box = await page.locator(SHUMEI_ICON_SELECTORS["bg"]).bounding_box()
     if not bg_box:
-        print("[Captcha-Icon] BG image bounding box missing")
+        _clog("[Captcha-Icon] BG image bounding box missing")
         return False
 
     def _url_to_cv2(data_url: str):
@@ -435,10 +441,10 @@ async def _solve_icon_select(page) -> bool:
     # Each icon column is fg_w // ICON_COUNT pixels wide, full height.
     col_w = fg_w // ICON_COUNT
     if col_w < 8 or fg_h < 8:
-        print(f"[Captcha-Icon] FG image too small: {fg_w}x{fg_h}")
+        _clog(f"[Captcha-Icon] FG image too small: {fg_w}x{fg_h}")
         return False
 
-    print(f"[Captcha-Icon] FG={fg_w}x{fg_h} bg={bg_w}x{bg_h} colW={col_w}")
+    _clog(f"[Captcha-Icon] FG={fg_w}x{fg_h} bg={bg_w}x{bg_h} colW={col_w}")
 
     matches: list[tuple[tuple[int, int], int]] = []  # [(x_center, y_center), overlap_radius]
 
@@ -447,7 +453,7 @@ async def _solve_icon_select(page) -> bool:
         x_end = (idx + 1) * col_w if idx < ICON_COUNT - 1 else fg_w
         tile = fg_red[0:fg_h, x_start:x_end]
         if tile.size == 0:
-            print(f"[Captcha-Icon] Tile {idx} empty")
+            _clog(f"[Captcha-Icon] Tile {idx} empty")
             continue
 
         tile_resized = cv2.resize(tile, (ICON_MATCH_SIZE, ICON_MATCH_SIZE))
@@ -459,10 +465,10 @@ async def _solve_icon_select(page) -> bool:
             if val > best_val:
                 best_val, best_loc, best_angle = val, loc, angle
 
-        print(f"[Captcha-Icon] Tile {idx} bestVal={best_val:.3f} angle={best_angle}")
+        _clog(f"[Captcha-Icon] Tile {idx} bestVal={best_val:.3f} angle={best_angle}")
 
         if best_val < ICON_MIN_THRESHOLD:
-            print(f"[Captcha-Icon] Tile {idx} below threshold {ICON_MIN_THRESHOLD}")
+            _clog(f"[Captcha-Icon] Tile {idx} below threshold {ICON_MIN_THRESHOLD}")
             return False
 
         cx = best_loc[0] + ICON_MATCH_SIZE // 2
@@ -470,10 +476,10 @@ async def _solve_icon_select(page) -> bool:
 
         overlap_radius = int(ICON_MATCH_SIZE * ICON_MIN_OVERLAP)
         matches.append(((cx, cy), overlap_radius))
-        print(f"[Captcha-Icon] Tile {idx} matched at ({cx},{cy})")
+        _clog(f"[Captcha-Icon] Tile {idx} matched at ({cx},{cy})")
 
     if len(matches) < 2:
-        print(f"[Captcha-Icon] Only {len(matches)} matches found")
+        _clog(f"[Captcha-Icon] Only {len(matches)} matches found")
         return False
 
     # Click each match position on the rendered bg img element
@@ -485,18 +491,18 @@ async def _solve_icon_select(page) -> bool:
     for i, ((px, py), _) in enumerate(matches):
         click_x = bg_box["x"] + px * scale_x
         click_y = bg_box["y"] + py * scale_y
-        print(f"[Captcha-Icon] Click {i + 1}: img({px},{py}) → page({click_x:.0f},{click_y:.0f})")
+        _clog(f"[Captcha-Icon] Click {i + 1}: img({px},{py}) → page({click_x:.0f},{click_y:.0f})")
         await page.mouse.click(click_x, click_y)
         await asyncio.sleep(0.15 + random.random() * 0.25)
 
     elapsed = (time.time() - t_start) * 1000
-    print(f"[Captcha-Icon] Solve complete ({elapsed:.0f}ms)")
+    _clog(f"[Captcha-Icon] Solve complete ({elapsed:.0f}ms)")
 
     # Verify: captcha gone or new popup opened
     deadline = time.time() + 8
     while time.time() < deadline:
         if len(page.context.pages) > pages_before:
-            print("[Captcha-Icon] Solved — new popup opened")
+            _clog("[Captcha-Icon] Solved — new popup opened")
             return True
         gone = await page.evaluate(
             """() => {
@@ -505,9 +511,9 @@ async def _solve_icon_select(page) -> bool:
             }"""
         )
         if gone:
-            print("[Captcha-Icon] Solved — wrapper gone")
+            _clog("[Captcha-Icon] Solved — wrapper gone")
             return True
         await asyncio.sleep(0.25)
 
-    print("[Captcha-Icon] Verification timeout")
+    _clog("[Captcha-Icon] Verification timeout")
     return False
