@@ -5,7 +5,7 @@ import { getStatusVariant as getConnectionStatusVariant } from "@/shared/utils/c
 import { Badge, Toggle, Tooltip } from "@/shared/components";
 import CooldownTimer from "./CooldownTimer";
 
-export default function ConnectionRow({ connection, proxyPools, isOAuth, isFirst, isLast, onMoveUp, onMoveDown, onToggleActive, onUpdateProxy, onEdit, onDelete, oneByOneStatus = null, autoPing = null }) {
+export default function ConnectionRow({ connection, autoclawBalance, autoclawAutoRefreshing, proxyPools, isOAuth, isFirst, isLast, onMoveUp, onMoveDown, onToggleActive, onUpdateProxy, onEdit, onDelete, oneByOneStatus = null, autoPing = null }) {
   const [showProxyDropdown, setShowProxyDropdown] = useState(false);
   const [updatingProxy, setUpdatingProxy] = useState(false);
   const proxyDropdownRef = useRef(null);
@@ -169,6 +169,16 @@ export default function ConnectionRow({ connection, proxyPools, isOAuth, isFirst
             <Badge variant="default" size="sm">
               {authLabel}
             </Badge>
+            {autoclawBalance && (
+              <Badge variant={autoclawBalance.balanceError ? "error" : autoclawBalance.balance > 0 ? "success" : "warning"} size="sm">
+                {autoclawBalance.balanceError ? autoclawBalance.balanceError : `${autoclawBalance.balance != null ? autoclawBalance.balance.toLocaleString() : "—"} pts`}
+              </Badge>
+            )}
+            {autoclawAutoRefreshing && (
+              <Badge variant="warning" size="sm" dot>
+                Auto-refreshing
+              </Badge>
+            )}
             {hasAnyProxy && (
               <Badge variant={proxyBadgeVariant} size="sm">
                 Proxy

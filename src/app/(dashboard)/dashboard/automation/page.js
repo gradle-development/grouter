@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Badge,
   Button,
@@ -14,7 +14,6 @@ import {
   Modal,
   OAuthModal,
   AutoclawAutomationModal,
-  Pagination,
 } from "@/shared/components";
 import ProviderIcon from "@/shared/components/ProviderIcon";
 import { FREE_PROVIDERS } from "@/shared/constants/providers";
@@ -379,87 +378,8 @@ function QoderAutomationPanel({ providerInfo, onRefresh }) {
 }
 
 function AutoclawAutomationPanel({ onRefresh }) {
-  const AUTOCLAW_PAGE_SIZE = 10;
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isBulkOpen, setIsBulkOpen] = useState(false);
-  const [autoclawConnections, setAutoclawConnections] = useState([]);
-  const [autoclawPage, setAutoclawPage] = useState(1);
-  const [refreshingIds, setRefreshingIds] = useState(() => new Set());
-  const [autoRefreshingIds, setAutoRefreshingIds] = useState(() => new Set());
-  const autoRefreshedRef = useRef(new Set());
-
-  const visibleAutoclawConnections = useMemo(() => {
-    const totalPages = Math.max(1, Math.ceil(autoclawConnections.length / AUTOCLAW_PAGE_SIZE));
-    const page = Math.min(autoclawPage, totalPages);
-    const start = (page - 1) * AUTOCLAW_PAGE_SIZE;
-    return autoclawConnections.slice(start, start + AUTOCLAW_PAGE_SIZE);
-  }, [autoclawConnections, autoclawPage]);
-
-  const autoclawTotalPages = Math.max(1, Math.ceil(autoclawConnections.length / AUTOCLAW_PAGE_SIZE));
-  const autoclawCurrentPage = Math.min(autoclawPage, autoclawTotalPages);
-
-  const refreshAutoclawList = useCallback(async () => {
-    try {
-      const res = await fetch("/api/oauth/autoclaw/connections", { cache: "no-store" });
-      const data = await res.json();
-      if (res.ok) setAutoclawConnections(data.connections || []);
-    } catch {
-    }
-  }, []);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-only data fetch
-    refreshAutoclawList();
-  }, [refreshAutoclawList]);
-
-  const refreshTokenFor = useCallback(async (connectionId, { auto = false } = {}) => {
-    setRefreshingIds((prev) => new Set(prev).add(connectionId));
-    if (auto) setAutoRefreshingIds((prev) => new Set(prev).add(connectionId));
-    try {
-      const res = await fetch(`/api/oauth/autoclaw/refresh?connectionId=${connectionId}`, { method: "POST" });
-      if (res.ok) {
-        await refreshAutoclawList();
-      }
-    } catch {
-    } finally {
-      setRefreshingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(connectionId);
-        return next;
-      });
-      if (auto) setAutoRefreshingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(connectionId);
-        return next;
-      });
-    }
-  }, [refreshAutoclawList]);
-
-  // Auto-refresh tokens for visible-page accounts with 0 points or balance fetch error (token likely revoked → keep alive)
-  useEffect(() => {
-    const needsRefresh = visibleAutoclawConnections.filter(
-      (c) => !autoRefreshedRef.current.has(c.id) && (c.balance === 0 || c.balanceError)
-    );
-    if (needsRefresh.length === 0) return;
-    needsRefresh.forEach((c) => autoRefreshedRef.current.add(c.id));
-    let cancelled = false;
-    (async () => {
-      for (const c of needsRefresh) {
-        if (cancelled) return;
-        await refreshTokenFor(c.id, { auto: true });
-        if (cancelled) return;
-        await new Promise((r) => setTimeout(r, 1000));
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [visibleAutoclawConnections, refreshTokenFor]);
-
-  const handleSaved = async () => {
-    await refreshAutoclawList();
-    onRefresh?.();
-  };
-
-  const handleRefreshToken = (connectionId) => refreshTokenFor(connectionId);
 
   return (
     <>
@@ -493,59 +413,10 @@ function AutoclawAutomationPanel({ onRefresh }) {
         onClose={() => setIsBulkOpen(false)}
       />
 
-      {autoclawConnections.length > 0 && (
-        <div className="mt-4 flex flex-col gap-2">
-          <h3 className="text-sm font-semibold text-text-main">Saved Accounts</h3>
-          <div className="flex flex-col gap-1">
-            {visibleAutoclawConnections.map((c) => {
-              const isAutoRefreshing = autoRefreshingIds.has(c.id);
-              return (
-                <div
-                  key={c.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-3 py-2"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-sm font-medium">{c.name || c.email}</span>
-                      {isAutoRefreshing && (
-                        <Badge variant="warning" size="sm" dot>
-                          Auto-refreshing
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="text-xs text-text-muted">
-                      {c.balance !== null && c.balance !== undefined ? `${c.balance} pts` : "—"}
-                      {c.balanceError ? ` · ${c.balanceError}` : ""}
-                    </div>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    loading={refreshingIds.has(c.id)}
-                    onClick={() => handleRefreshToken(c.id)}
-                  >
-                    Refresh
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
-          {autoclawConnections.length > AUTOCLAW_PAGE_SIZE && (
-            <Pagination
-              currentPage={autoclawCurrentPage}
-              pageSize={AUTOCLAW_PAGE_SIZE}
-              totalItems={autoclawConnections.length}
-              onPageChange={setAutoclawPage}
-              className="py-2 px-0"
-            />
-          )}
-        </div>
-      )}
-
       <AutoclawAutomationModal
         isOpen={isImportOpen}
         onClose={() => setIsImportOpen(false)}
-        onSaved={handleSaved}
+        onSaved={() => onRefresh?.()}
       />
     </>
   );
