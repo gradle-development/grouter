@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -79,6 +79,10 @@ export default function ProviderDetailPage() {
   const stopOneByOneRef = useRef(false);
   const [importingQoderModels, setImportingQoderModels] = useState(false);
   const [connectionPage, setConnectionPage] = useState(1);
+  const [autoclawBalances, setAutoclawBalances] = useState([]);
+  const [refreshingAutoclawBalance, setRefreshingAutoclawBalance] = useState(false);
+  const [autoRefreshingAutoclawIds, setAutoRefreshingAutoclawIds] = useState(() => new Set());
+  const autoRefreshedAutoclawRef = useRef(new Set());
   const { copied, copy } = useCopyToClipboard();
 
   const AG_RISK_STORAGE_KEY = "ag_risk_confirmed";
@@ -309,6 +313,37 @@ export default function ProviderDetailPage() {
     }
   }, [providerId, isCompatible]);
 
+  const fetchAutoclawBalances = useCallback(async () => {
+    try {
+      const res = await fetch("/api/oauth/autoclaw/connections", { cache: "no-store" });
+      const data = await res.json();
+      if (res.ok) setAutoclawBalances(data.connections || []);
+    } catch {}
+  }, []);
+
+  const refreshAutoclawBalances = useCallback(async () => {
+    setRefreshingAutoclawBalance(true);
+    try {
+      await fetchAutoclawBalances();
+    } finally {
+      setRefreshingAutoclawBalance(false);
+    }
+  }, [fetchAutoclawBalances]);
+
+  const refreshSingleAutoclawToken = useCallback(async (connectionId) => {
+    setAutoRefreshingAutoclawIds((prev) => new Set(prev).add(connectionId));
+    try {
+      await fetch(`/api/oauth/autoclaw/refresh?connectionId=${connectionId}`, { method: "POST" });
+      await fetchAutoclawBalances();
+    } catch {} finally {
+      setAutoRefreshingAutoclawIds((prev) => {
+        const next = new Set(prev);
+        next.delete(connectionId);
+        return next;
+      });
+    }
+  }, [fetchAutoclawBalances]);
+
   const handleUpdateNode = async (formData) => {
     try {
       const res = await fetch(`/api/provider-nodes/${providerId}`, {
@@ -425,6 +460,11 @@ export default function ProviderDetailPage() {
     fetchCustomModels();
     fetchDisabledModels();
   }, [fetchConnections, fetchAliases, fetchCustomModels, fetchDisabledModels]);
+
+  useEffect(() => {
+    if (providerId !== "autoclaw") return;
+    fetchAutoclawBalances();
+  }, [providerId, fetchAutoclawBalances]);
 
   // Fetch suggested models from provider's public API (if configured)
   useEffect(() => {
@@ -788,7 +828,10 @@ export default function ProviderDetailPage() {
   const connectionTotalPages = Math.max(1, Math.ceil(connections.length / CONNECTIONS_PER_PAGE));
   const connectionPageClamped = Math.min(Math.max(1, connectionPage), connectionTotalPages);
   const pagedStart = (connectionPageClamped - 1) * CONNECTIONS_PER_PAGE;
-  const pagedConnections = connections.slice(pagedStart, pagedStart + CONNECTIONS_PER_PAGE);
+  const pagedConnections = useMemo(
+    () => connections.slice(pagedStart, pagedStart + CONNECTIONS_PER_PAGE),
+    [connections, pagedStart]
+  );
 
   useEffect(() => {
     const maxPage = Math.max(1, Math.ceil(connections.length / CONNECTIONS_PER_PAGE));
@@ -894,6 +937,35 @@ export default function ProviderDetailPage() {
 
   const isSelected = (connectionId) => selectedConnectionIds.includes(connectionId);
 
+  const autoclawBalanceMap = useMemo(() => {
+    const map = new Map();
+    for (const b of autoclawBalances) map.set(b.id, b);
+    return map;
+  }, [autoclawBalances]);
+
+  useEffect(() => {
+    if (providerId !== "autoclaw") return;
+    const needsRefresh = pagedConnections.filter((conn) => {
+      const bal = autoclawBalanceMap.get(conn.id);
+      if (!bal) return false;
+      if (autoRefreshedAutoclawRef.current.has(conn.id)) return false;
+      return bal.balance === 0 || bal.balanceError;
+    });
+    if (needsRefresh.length === 0) return;
+    needsRefresh.forEach((c) => autoRefreshedAutoclawRef.current.add(c.id));
+    let cancelled = false;
+    (async () => {
+      for (const c of needsRefresh) {
+        if (cancelled) break;
+        await refreshSingleAutoclawToken(c.id);
+        if (cancelled) break;
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pagedConnections, refreshSingleAutoclawToken, providerId]);
+
   const connectionsList = (
     <div className="flex min-w-0 flex-col divide-y divide-black/[0.03] dark:divide-white/[0.03]">
       {connections.length > 1 && (
@@ -902,7 +974,7 @@ export default function ProviderDetailPage() {
             type="checkbox"
             checked={allSelected}
             onChange={toggleSelectAllConnections}
-            className="h-3.5 w-3.5 rounded border-border accent-primary"
+            className="h-4 w-4 rounded border-border accent-primary"
           />
           <span>{selectedConnectionIds.length > 0 ? `${selectedConnectionIds.length} selected` : "Select all"}</span>
         </div>
@@ -922,6 +994,8 @@ export default function ProviderDetailPage() {
             <div className="flex-1 min-w-0">
               <ConnectionRow
                 connection={conn}
+                autoclawBalance={autoclawBalanceMap.get(conn.id) || null}
+                autoclawAutoRefreshing={autoRefreshingAutoclawIds.has(conn.id)}
                 proxyPools={proxyPools}
                 isOAuth={isOAuth}
                 isFirst={index === 0}
@@ -1287,6 +1361,20 @@ export default function ProviderDetailPage() {
             <p className="text-text-muted">
               {connections.length} connection{connections.length === 1 ? "" : "s"}
             </p>
+            {providerId === "autoclaw" && (
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-sm text-text-muted">
+                  Total: {autoclawBalances.reduce((sum, c) => sum + (c.balance || 0), 0).toLocaleString()} pts
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  icon="refresh"
+                  loading={refreshingAutoclawBalance}
+                  onClick={refreshAutoclawBalances}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1542,19 +1630,6 @@ export default function ProviderDetailPage() {
                       <span>Running: {connections.find((conn) => conn.id === oneByOneCurrentConnectionId)?.name || oneByOneCurrentConnectionId}</span>
                     )}
                   </div>
-                </div>
-              )}
-              {connections.length > 0 && (
-                <div className="mb-3 flex items-center gap-2 border-b border-black/[0.03] pb-2 dark:border-white/[0.03]">
-                  <label className="flex cursor-pointer items-center gap-1.5 text-xs text-text-muted hover:text-primary">
-                    <input
-                      type="checkbox"
-                      checked={allSelected}
-                      onChange={toggleSelectAllConnections}
-                      className="h-3.5 w-3.5 rounded border-gray-300 text-primary focus:ring-primary"
-                    />
-                    Select All
-                  </label>
                 </div>
               )}
               {connectionsList}
