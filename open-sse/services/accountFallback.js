@@ -181,6 +181,47 @@ export function buildKimchiQuotaExhaustedUpdate(now = new Date()) {
 }
 
 /**
+ * Patterns to detect autoclaw balance exhaustion (points depleted).
+ * Error from proxy: {"message":"积分不足,请充值"} (Insufficient points, please recharge).
+ * Also match generic insufficient balance patterns.
+ */
+const AUTOCLAW_BALANCE_EXHAUSTED_PATTERNS = [
+  /积分不足/i,
+  /insufficient.{0,10}balance/i,
+  /insufficient.{0,10}points/i,
+  /points?.{0,20}exhausted/i,
+];
+
+/**
+ * Detect whether error indicates autoclaw balance exhaustion.
+ * @param {string} provider
+ * @param {string|object} errorText
+ * @returns {boolean}
+ */
+export function isAutoclawInsufficientBalance(provider, errorText) {
+  if (!errorText || provider !== "autoclaw") return false;
+  const text = typeof errorText === "string"
+    ? errorText
+    : (() => { try { return JSON.stringify(errorText); } catch { return String(errorText); } })();
+  return AUTOCLAW_BALANCE_EXHAUSTED_PATTERNS.some(p => p.test(text));
+}
+
+/**
+ * Build update payload to deactivate an autoclaw account due to insufficient balance.
+ * No auto-reset — points are recharge-based, not monthly. Manual reactivation needed.
+ * @returns {{ isActive: boolean, testStatus: string, lastErrorType: string, errorCode: number, balanceExhaustedAt: string }}
+ */
+export function buildAutoclawBalanceExhaustedUpdate(now = new Date()) {
+  return {
+    isActive: false,
+    testStatus: "insufficient_balance",
+    lastErrorType: "insufficient_balance",
+    errorCode: 402,
+    balanceExhaustedAt: now.toISOString(),
+  };
+}
+
+/**
  * Build update payload to reactivate a quota-exhausted Kimchi account whose
  * rateLimitedUntil has passed (start of new month).
  * @returns {{ isActive: boolean, rateLimitedUntil: null, testStatus: string }}
