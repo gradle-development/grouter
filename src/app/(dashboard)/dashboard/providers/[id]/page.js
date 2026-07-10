@@ -1519,16 +1519,6 @@ export default function ProviderDetailPage() {
               )}
               {connections.length > 0 && (
                 <>
-                  {selectedConnectionIds.length > 0 && (
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      icon="delete"
-                      onClick={handleBulkDelete}
-                    >
-                      Delete Selected ({selectedConnectionIds.length})
-                    </Button>
-                  )}
                   <Button
                     size="sm"
                     variant="secondary"
