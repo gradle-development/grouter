@@ -152,6 +152,9 @@ TERMS_CHECKBOX_SELECTORS = [
     'input[type="checkbox"][name*="agree" i]',
     'input[type="checkbox"][id*="policy" i]',
     'input[type="checkbox"][id*="terms" i]',
+    '.login-checkbox input[type="checkbox"]',
+    '[class*="checkbox"] input[type="checkbox"]',
+    '[class*="agree"] input[type="checkbox"]',
     'input[type="checkbox"]',
 ]
 
@@ -223,7 +226,7 @@ PRIVACY_CONFIRM_SELECTORS = [
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _log(*args: Any) -> None:
-    print(f"[AutoClaw]", *args, file=sys.stderr)
+    print(f"[AutoClaw]", *args, file=sys.stderr, flush=True)
 
 
 def _output(obj: dict) -> None:
@@ -374,7 +377,16 @@ async def _human_type(locator, value: str) -> bool:
 
 
 async def _fill_input_resilient(locator, value: str) -> bool:
-    """Fill input with fallback strategies."""
+    """Fill input with fallback strategies. Try fast fill first, human type as fallback."""
+    try:
+        await locator.click(timeout=3_000)
+        await locator.fill("")
+        await locator.fill(value)
+        observed = await locator.input_value()
+        if observed == value:
+            return True
+    except Exception:
+        pass
     filled = await _human_type(locator, value)
     if filled:
         return True
@@ -418,8 +430,8 @@ async def _wait_for_next_step(page: Page, baseline_url: str = "",
     return "timeout"
 
 
-async def _check_unchecked(page: Page, selectors: list[str]) -> bool:
-    """Check first unchecked checkbox."""
+async def _check_unchecked(page: Page, selectors: list[str], force: bool = False) -> bool:
+    """Check first visible checkbox. If force=True, verify even already-checked boxes."""
     for sel in selectors:
         try:
             loc = page.locator(sel).first
@@ -427,39 +439,144 @@ async def _check_unchecked(page: Page, selectors: list[str]) -> bool:
                 continue
             if not await loc.is_visible():
                 continue
-            checked = await loc.is_checked()
-            if not checked:
-                await loc.check(timeout=3_000)
-                return True
+            if not force:
+                try:
+                    if await loc.is_checked():
+                        continue
+                except Exception:
+                    pass
         except Exception:
             continue
+
+        # Strategy 1: Playwright .check() with force
+        try:
+            await loc.check(force=True, timeout=3_000)
+            if await _verify_checked(loc):
+                return True
+        except Exception:
+            pass
+
+        # Strategy 2: direct click on checkbox
+        try:
+            await loc.click(force=True, timeout=3_000)
+            if await _verify_checked(loc):
+                return True
+        except Exception:
+            pass
+
+        # Strategy 3: click parent label
+        try:
+            label_clicked = await page.evaluate("""selector => {
+                const el = document.querySelector(selector);
+                if (!el) return false;
+                const label = el.closest('label') || el.parentElement?.closest('label');
+                if (label instanceof HTMLElement) { label.click(); return true; }
+                return false;
+            }""", sel)
+            if label_clicked and await _verify_checked(loc):
+                return True
+        except Exception:
+            pass
+
+        # Strategy 4: DOM prototype setter
+        try:
+            dom_ok = await page.evaluate("""selector => {
+                const input = document.querySelector(selector);
+                if (!(input instanceof HTMLInputElement)) return false;
+                const proto = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked');
+                if (proto?.set) proto.set.call(input, true);
+                else input.checked = true;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+                return input.checked;
+            }""", sel)
+            if dom_ok:
+                return True
+        except Exception:
+            pass
+
     return False
+
+
+async def _verify_checked(locator) -> bool:
+    try:
+        return await locator.is_checked()
+    except Exception:
+        return False
 
 
 # ── Page handlers ──────────────────────────────────────────────────────────────
 
 async def _handle_zai_authorize(page: Page, step_cb) -> bool:
-    """Handle Z.ai authorize page: check agree checkbox + click Continue."""
-    text = await _read_page_text(page)
-    if "would like to access your" not in text.lower() and "wants to access your" not in text.lower():
-        if "autoglm" not in text.lower():
-            return False
-    cb_checked = await _check_unchecked(page, TERMS_CHECKBOX_SELECTORS)
+    """Handle Z.ai/AutoGLM authorize page: check agree checkbox + click Continue."""
+    # URL-based detection (matches JS: chat.z.ai/auth)
+    try:
+        url = page.url
+        is_zai_auth_url = "chat.z.ai/auth" in url or "z.ai" in url
+    except Exception:
+        url = ""
+        is_zai_auth_url = False
+
+    if not is_zai_auth_url:
+        return False
+
+    # Token-in-fragment page: body empty, just wait for token_monitor — no UI to interact with
+    if "#token=" in url:
+        step_cb("zai_token_skip", "Z.ai token redirect page — skipping UI, waiting for token")
+        return False
+
+    # Poll for page text to render (SPA hydration delay)
+    text = ""
+    for _ in range(10):
+        text = await _read_page_text(page)
+        if text.strip():
+            break
+        await asyncio.sleep(0.5)
+    is_zai_text = "would like to access your" in text.lower() or "wants to access your" in text.lower()
+    is_autoglm = "autoglm" in text.lower()
+
+    _log(f"[zai_detect] url={url[:100]} is_zai_text={is_zai_text} is_autoglm={is_autoglm} text_head={text[:200]}")
+
+    if not is_zai_text and not is_autoglm:
+        return False
+
+    # Check/set terms checkbox (force — even if appears already checked)
+    cb_checked = await _check_unchecked(page, TERMS_CHECKBOX_SELECTORS, force=True)
     if cb_checked:
         step_cb("zai_authorize_terms", "Checked Z.ai terms checkbox")
+        await asyncio.sleep(0.3)
+
+    # Poll for enabled Continue button (like JS pollAndClickFirstVisible)
+    deadline = time.monotonic() + 8.0
+    while time.monotonic() < deadline:
+        clicked = await _click_first_actionable(page, [
+            'button:has-text("Continue"):not([disabled])',
+            'button:not([disabled]):has-text("Continue")',
+            'button:has-text("Lanjutkan")',
+            'button:has-text("继续")',
+            'button:has-text("同意")',
+            'button:has-text("授权")',
+            'button:has-text("允许")',
+            'button:has-text("Authorize")',
+            'button:has-text("Allow")',
+            '[role="button"]:has-text("Continue")',
+            '[role="button"]:has-text("Lanjutkan")',
+        ])
+        if clicked:
+            step_cb("zai_authorize_continue", "Clicked Continue on Z.ai authorize page")
+            await _wait_for_next_step(page, page.url, target_selectors=[
+                'button:has-text("去注册")',
+                'button:has-text("登录")',
+                '[class*="login-gate"]',
+                '[class*="autoclaw"]',
+            ], timeout_ms=10_000)
+            return True
         await asyncio.sleep(0.5)
-    clicked = await _click_first_actionable(page, [
-        'button:has-text("Continue")',
-        'button:has-text("Lanjutkan")',
-        'button:has-text("继续")',
-        '[role="button"]:has-text("Continue")',
-        '[role="button"]:has-text("Lanjutkan")',
-    ])
-    if clicked:
-        step_cb("zai_authorize_continue", "Clicked Continue on Z.ai authorize page")
-        await _wait_for_next_step(page, page.url, timeout_ms=5_000)
+
+    step_cb("zai_authorize_timeout", "Continue button not found on Z.ai authorize page")
+    if cb_checked:
         return True
-    return bool(cb_checked)
+    return False
 
 
 async def _handle_google_consent(page: Page, step_cb) -> bool:
@@ -549,13 +666,16 @@ async def _handle_provider_login_gate(page: Page, step_cb) -> bool:
         await asyncio.sleep(1)
         return True
 
-    checked = await _check_unchecked(page, TERMS_CHECKBOX_SELECTORS)
+    checked = await _check_unchecked(page, TERMS_CHECKBOX_SELECTORS, force=True)
     if checked:
         step_cb("provider_terms", "Accepted provider terms")
-        await asyncio.sleep(0.4)
-        await _handle_zai_authorize(page, step_cb)
-        await _click_first_actionable(page, GOOGLE_LOGIN_BUTTON_SELECTORS)
-        return True
+        await asyncio.sleep(0.8)
+        if await _handle_zai_authorize(page, step_cb):
+            return True
+        # JS: waitForGoogleButtonOrZaiAuthorize — settle then retry
+        await asyncio.sleep(2)
+        if await _handle_zai_authorize(page, step_cb):
+            return True
 
     step_cb("provider_google_login", "Clicking Continue with Google")
     clicked = await _click_first_actionable(page, GOOGLE_LOGIN_BUTTON_SELECTORS)
@@ -759,9 +879,10 @@ async def _run_autoclaw_flow(
 
     captcha_visible = False
     try:
-        captcha_visible = await page.locator(".shumei_captcha_wrapper").first.is_visible()
+        await page.wait_for_selector(".shumei_captcha_wrapper", state="visible", timeout=6_000)
+        captcha_visible = True
     except Exception:
-        pass
+        captcha_visible = False
 
     if captcha_visible:
         _step("detected_captcha_main", "Shumei captcha detected — solving")
@@ -903,6 +1024,40 @@ async def _google_login_loop(
                 await asyncio.sleep(1)
                 continue
 
+            # Google intermediate pages (SetSID, CheckCookie) — auto-redirect, just wait
+            if "accounts.google." in current_url:
+                text = await _read_page_text(page)
+                if not text.strip():
+                    step_cb("google_intermediate", "Google intermediate redirect — waiting")
+                    await asyncio.sleep(1)
+                    continue
+
+            # Z.ai token URL page — wait for JS to process token, then redirect to autoclaw.z.ai
+            if "chat.z.ai/auth" in current_url and "#token=" in current_url:
+                step_cb("zai_token_page", "Z.ai token redirect — waiting for JS to process")
+                # First, wait for page content to load (SPA/JS processing)
+                for _ in range(10):
+                    try:
+                        text = await _read_page_text(page)
+                        if text.strip():
+                            step_cb("zai_token_loaded", "Z.ai token page content loaded")
+                            break
+                    except Exception:
+                        pass
+                    await asyncio.sleep(1)
+                # Then wait for redirect to autoclaw.z.ai
+                for _ in range(20):
+                    try:
+                        if "autoclaw.z.ai" in page.url:
+                            step_cb("zai_token_redirected", "Redirected to autoclaw.z.ai — token monitor should extract")
+                            break
+                    except Exception:
+                        pass
+                    await asyncio.sleep(1)
+                else:
+                    step_cb("zai_token_timeout", "Z.ai token page did not redirect — token_monitor may still extract")
+                continue
+
             # Provider login gate
             handled = await _handle_provider_login_gate(page, step_cb)
             if handled:
@@ -985,6 +1140,23 @@ async def _google_login_loop(
                     await asyncio.sleep(random.uniform(0.2, 0.5))
                     await _click_first_visible(page, NEXT_BUTTON_SELECTORS)
                     await _wait_for_next_step(page, page.url, timeout_ms=10_000)
+
+                    # After Google password submit, wait for redirect to Z.ai consent page
+                    step_cb("waiting_zai_redirect", "Waiting for Z.ai redirect after password")
+                    # Wait until we're on Z.ai consent page (not the intermediate #token= page)
+                    for _ in range(30):  # max 30s
+                        try:
+                            current = page.url
+                            if "z.ai" in current:
+                                text = await _read_page_text(page)
+                                if "would like to access your" in text.lower() or "autoglm" in text.lower():
+                                    break
+                        except Exception:
+                            pass
+                        await asyncio.sleep(1)
+                    # Handle Z.ai consent
+                    if await _handle_zai_authorize(page, step_cb):
+                        step_cb("zai_consent_post_password", "Handled Z.ai consent after password")
                 continue
 
             # Generic approve/continue click
