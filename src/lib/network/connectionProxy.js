@@ -178,6 +178,28 @@ function djb2(str) {
  * @param {object} providerSpecificData
  * @returns {string} "direct" if no proxy, "proxy-<hash>" if explicit proxy, "pool-<hash>" if proxy pool
  */
+// Module-level round-robin index per provider (never persisted — resets on restart, fine for proxy pool rotation)
+const _roundRobinIdx = new Map();
+
+/**
+ * Pick a proxy pool ID from a list using the given strategy.
+ * @param {string[]} poolIds - Array of active proxy pool IDs
+ * @param {string} strategy - "fill-first" | "round-robin"
+ * @param {string} key - Provider ID for sticky round-robin tracking
+ * @returns {string|null} Picked pool ID or null if list empty
+ */
+export function pickProxyPoolId(poolIds, strategy, key) {
+  if (!poolIds || poolIds.length === 0) return null;
+  if (strategy === "round-robin") {
+    const idx = _roundRobinIdx.get(key) ?? -1;
+    const next = (idx + 1) % poolIds.length;
+    _roundRobinIdx.set(key, next);
+    return poolIds[next];
+  }
+  // fill-first (default)
+  return poolIds[0];
+}
+
 export function getProxyHash(providerSpecificData = {}) {
   const enabled = providerSpecificData?.connectionProxyEnabled === true;
   const url = enabled ? normalizeString(providerSpecificData?.connectionProxyUrl) : "";
