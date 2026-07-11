@@ -107,7 +107,51 @@ Client (OpenAI format) → /api/v1/* → SSE handlers → Translator → Executo
 4. **Translator pairs**: Register `request/<from>-to-<to>.js` + `response/<from>-to-<to>.js`.
 5. **ESM**: All imports use `.js` extension.
 
-## Adding Features
+## Upstream Sync Rules (MANDATORY)
+
+**This is a fork.** Upstream is `VansRouter` (https://github.com/Vanszs/VansRouter). We maintain custom features on top. Every change must minimize future merge conflicts.
+
+### Conflict Prevention
+
+1. **Do not modify upstream files in-place.** If you need to change behavior of a file from upstream (`open-sse/`, tests from upstream, etc.), do NOT edit the original file. Instead:
+   - **Wrapper/adapter**: Create new file that imports and wraps the upstream function.
+   - **Config injection**: Use existing config hooks (`open-sse/config/`, `src/shared/constants/`) instead of hardcoding in upstream modules.
+   - **Plugin pattern**: Register callbacks if available; don't monkey-patch.
+
+2. **New features go in new files.** Custom features (automation, pxpipe, cloudflare, dashboard, 9router-specific ACL) live in their own modules. Never sprinkle custom logic into upstream core files like `open-sse/handlers/chatCore.js`, `open-sse/executors/`, or translator files unless there is no extension point — and if so, flag it in the commit message with `UPSTREAM-PATCH:` prefix.
+
+3. **When upstream files MUST be modified:**
+   - Minimize the diff. One-line insert at the right hook point, not a rewrite.
+   - Mark with `// 9router:` comment so it's grep-able during sync.
+   - Commit message starts with `upstream-patch: <reason>`
+
+4. **Generated files stay generated.** Do not manually edit:
+   - `open-sse/providers/registry/index.js` (regenerate via build step)
+   - `pnpm-lock.yaml` (use `pnpm install`)
+   Pulling upstream may overwrite these — that's fine, regenerate after merge.
+
+5. **Tests from upstream**: Keep upstream test files intact. Add 9router-specific tests in separate files or separate `describe` blocks.
+
+### Sync Workflow (for maintainers)
+
+```bash
+# Sync upstream regularly (every 2-4 weeks, not every 6 months)
+git fetch upstream
+git checkout main
+git merge upstream/main
+
+# Rebase feature branches on synced main
+git checkout feat/my-feature
+git rebase main
+```
+
+### Conflict Resolution Priority
+
+On conflict during upstream merge:
+- **Our custom feature files** (`pxpipe/`, `src/app/(dashboard)/`, `feat/automation*`): keep ours, then adapt.
+- **Upstream core files modified by us**: check if upstream made the same fix. Prefer upstream version + re-apply our minimal patch.
+- **Config files** (`package.json`, `next.config.*`): merge both additions, resolve duplicate keys manually.
+- **Generated files** (`pnpm-lock.yaml`, registry index): accept upstream, regenerate ours after.
 
 | Task | Where | Notes |
 |------|-------|-------|
