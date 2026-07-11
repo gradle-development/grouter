@@ -247,7 +247,7 @@ function normalizeCodeBuddyKeyName(email) {
     .replace(/^-+|-+$/g, "")
     .slice(0, 32) || "codebuddy";
   const suffix = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
-  return `9router-${prefix}-${suffix}`.slice(0, 50);
+  return `grouter-${prefix}-${suffix}`.slice(0, 50);
 }
 
 function classifyCodeBuddyKeyError(status, payload) {

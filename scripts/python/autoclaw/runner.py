@@ -1342,7 +1342,7 @@ def main() -> None:
     parser.add_argument("password", help="Google password")
     parser.add_argument("--proxy", default=os.environ.get("PROXY_URL"), help="Proxy URL (http://user:pass@host:port)")
     parser.add_argument("--device-id", help="Device ID (auto-generated if blank)")
-    parser.add_argument("--db", help="SQLite DB path (e.g. ~/.9router/data.db) — saves tokens on success")
+    parser.add_argument("--db", help="SQLite DB path (e.g. ~/.grouter/data.db) — saves tokens on success")
     parser.add_argument("--engine", choices=["chromium", "cloakbrowser"], default="chromium",
                         help="Browser engine (default: chromium)")
     args = parser.parse_args()

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { Card, Button, Input } from "@/shared/components";
 
 export default function LoginPage() {
@@ -139,7 +140,10 @@ export default function LoginPage() {
       <div className="landing-grid absolute inset-0 pointer-events-none" aria-hidden="true" />
       <div className="relative z-10 w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-primary mb-2">VansRouter</h1>
+          <div className="flex justify-center mb-4">
+            <Image src="/grouter.png" alt="Grouter" width={72} height={72} className="rounded-xl" unoptimized />
+          </div>
+          <h1 className="text-3xl font-bold text-primary mb-2">Grouter</h1>
           <p className="text-text-muted">
             {authMode === "oidc" && oidcConfigured
               ? "Sign in with your OIDC provider to access the dashboard"

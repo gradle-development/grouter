@@ -24,7 +24,7 @@ export default function Navigation() {
               <circle cx="16" cy="9" r="2" fill="white"/>
             </svg>
           </div>
-          <h2 className="text-white text-xl font-bold tracking-tight">VansAI</h2>
+          <h2 className="text-white text-xl font-bold tracking-tight">Grouter</h2>
         </button>
 
         {/* Desktop menu */}

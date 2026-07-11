@@ -1,4 +1,4 @@
-# Custom Logic — VansAI (9router Fork)
+# Custom Logic — Grouter (9router Fork)
 
 This document details all custom logic added on top of the upstream 9router codebase.
 Each section covers the feature's purpose, flow, files, and behavioral rules.
@@ -252,11 +252,11 @@ Request to /v1/*
 
 ---
 
-## 9. VansAI Branding
+## 9. Grouter Branding
 
 ### Files
-- `src/app/layout.js` — Title: "VansAI - AI Infrastructure Management"
-- `src/dashboardGuard.js` — API welcome: "Welcome to VansAI! Use {baseUrl}/v1 as your API endpoint."
+- `src/app/layout.js` — Title: "Grouter - AI Infrastructure Management"
+- `src/dashboardGuard.js` — API welcome: "Welcome to Grouter! Use {baseUrl}/v1 as your API endpoint."
 - Default fallback host: `api.bevansatria.my.id`
 
 ---
@@ -370,7 +370,7 @@ If the node row doesn't exist (deleted between listing and POST), returns 404.
 | `open-sse/translator/formats/openai.js` | Import + use collapseTextParts |
 | `open-sse/utils/reasoningContentInjector.js` | Regex fix |
 | `open-sse/services/combo.js` | web_search detection + early return + stripComboPrefix export |
-| `src/app/layout.js` | VansAI branding + upstream GA/font script |
+| `src/app/layout.js` | Grouter branding + upstream GA/font script |
 | `src/dashboardGuard.js` | canAccessPublicLlmApi with allowRemoteNoApiKey gate |
 | `src/app/(dashboard)/dashboard/endpoint/EndpointPageClient.js` | allowRemoteNoApiKey toggle UI |
 | `src/app/api/providers/route.js` | Multi-connection per compatible node (removed one-connection guard) |

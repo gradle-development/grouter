@@ -50,10 +50,10 @@ function ensureAutomationRuntimeDir() {
   const pkgPath = path.join(dir, "package.json");
   if (!fs.existsSync(pkgPath)) {
     fs.writeFileSync(pkgPath, JSON.stringify({
-      name: "9router-automation-runtime",
+      name: "grouter-automation-runtime",
       version: "1.0.0",
       private: true,
-      description: "User-writable browser automation runtime for 9router",
+      description: "User-writable browser automation runtime for grouter",
       dependencies: {},
       optionalDependencies: {},
     }, null, 2));
@@ -79,8 +79,8 @@ function installAutomationPackages(pkgs, { silent = false, timeout = 300_000, no
   const extraArgs = noSave ? ["--no-save"] : [];
   const result = runNpmInstall({ cwd, pkgs, extraArgs, timeout });
   if (!result.ok && !silent) {
-    console.warn(`[9router] automation runtime install failed: ${summarizeNpmError(result.stderr)}`);
-    console.warn(`[9router] retry manually: cd "${cwd}" && npm install ${pkgs.join(" ")}`);
+    console.warn(`[grouter] automation runtime install failed: ${summarizeNpmError(result.stderr)}`);
+    console.warn(`[grouter] retry manually: cd "${cwd}" && npm install ${pkgs.join(" ")}`);
   }
   return result;
 }

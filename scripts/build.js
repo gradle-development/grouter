@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Cross-platform production build for the VansAI app.
+// Cross-platform production build for the Grouter app.
 //
 // Why this script exists:
 //   On Windows, something in the Next.js build pipeline recursively globs the

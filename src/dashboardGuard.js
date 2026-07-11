@@ -219,16 +219,16 @@ export async function proxy(request) {
   }
 
   // Deny-by-default for /api/* — public allow-list bypasses, everything else requires auth.
-  if (pathname === "/masuk" || pathname === "/masuk/") {
+  if (pathname === "/login" || pathname === "/login/") {
     if (await isAuthenticated(request)) {
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }
     return NextResponse.next();
   }
 
-  // /login - always redirect to /masuk
-  if (pathname === "/login" || pathname === "/login/") {
-    return NextResponse.redirect(new URL("/masuk", request.url));
+  // /masuk - always redirect to /login
+  if (pathname === "/masuk" || pathname === "/masuk/") {
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
   // / - redirect to dashboard if authenticated, otherwise return JSON welcome
@@ -243,7 +243,7 @@ export async function proxy(request) {
 
     return new NextResponse(
       JSON.stringify({
-        message: `Welcome to VansAI! Use ${baseUrl}/v1 as your API endpoint.`,
+        message: `Welcome to Grouter! Use ${baseUrl}/v1 as your API endpoint.`,
       }),
       {
         status: 200,
@@ -271,7 +271,7 @@ export async function proxy(request) {
           const tunnelHost = settings.tunnelUrl ? new URL(settings.tunnelUrl).hostname.toLowerCase() : "";
           const tailscaleHost = settings.tailscaleUrl ? new URL(settings.tailscaleUrl).hostname.toLowerCase() : "";
           if ((tunnelHost && host === tunnelHost) || (tailscaleHost && host === tailscaleHost)) {
-            return NextResponse.redirect(new URL("/masuk", request.url));
+            return NextResponse.redirect(new URL("/login", request.url));
           }
         }
       }

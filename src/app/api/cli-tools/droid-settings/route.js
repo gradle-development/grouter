@@ -46,10 +46,10 @@ const readSettings = async () => {
   }
 };
 
-// Check if settings has 9Router customModels
+// Check if settings has Grouter customModels
 const has9RouterConfig = (settings) => {
   if (!settings || !settings.customModels) return false;
-  return settings.customModels.some(m => m.id?.startsWith("custom:9Router"));
+  return settings.customModels.some(m => m.id?.startsWith("custom:Grouter"));
 };
 
 // GET - Check droid CLI and read current settings
@@ -78,7 +78,7 @@ export async function GET() {
   }
 }
 
-// POST - Update 9Router customModels (merge with existing settings)
+// POST - Update Grouter customModels (merge with existing settings)
 // Accepts either `model` (string, legacy single-model) or `models` (array of strings, multi-model)
 // Also accepts `activeModel` to set which model is active/primary
 export async function POST(request) {
@@ -106,8 +106,8 @@ export async function POST(request) {
       settings.customModels = [];
     }
 
-    // Remove all existing 9Router configs
-    settings.customModels = settings.customModels.filter(m => !m.id?.startsWith("custom:9Router"));
+    // Remove all existing Grouter configs
+    settings.customModels = settings.customModels.filter(m => !m.id?.startsWith("custom:Grouter"));
 
     // Normalize baseUrl to ensure /v1 suffix
     const normalizedBaseUrl = baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
@@ -132,7 +132,7 @@ export async function POST(request) {
       if (!m || typeof m !== "string") continue;
       settings.customModels.push({
         model: m,
-        id: `custom:9Router-${i}`,
+        id: `custom:Grouter-${i}`,
         index: i,
         baseUrl: normalizedBaseUrl,
         apiKey: keyToUse,
@@ -165,7 +165,7 @@ export async function POST(request) {
   }
 }
 
-// DELETE - Remove 9Router customModels only (keep other settings)
+// DELETE - Remove Grouter customModels only (keep other settings)
 export async function DELETE() {
   try {
     const settingsPath = getDroidSettingsPath();
@@ -179,9 +179,9 @@ export async function DELETE() {
       });
     }
 
-    // Remove 9Router customModels
+    // Remove Grouter customModels
     if (settings.customModels) {
-      settings.customModels = settings.customModels.filter(m => !m.id?.startsWith("custom:9Router"));
+      settings.customModels = settings.customModels.filter(m => !m.id?.startsWith("custom:Grouter"));
       
       // Remove customModels array if empty
       if (settings.customModels.length === 0) {
@@ -194,7 +194,7 @@ export async function DELETE() {
 
     return NextResponse.json({
       success: true,
-      message: "9Router settings removed successfully",
+      message: "Grouter settings removed successfully",
     });
   } catch (error) {
     return NextResponse.json({ error: "Failed to reset droid settings" }, { status: 500 });

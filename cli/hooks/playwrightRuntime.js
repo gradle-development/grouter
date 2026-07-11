@@ -232,7 +232,7 @@ function ensurePlaywrightRuntime({ silent = false, timeout } = {}) {
     cachedReady = false;
     const error = new Error(
       `Playwright not available. ${pkg.reason}. ` +
-      `Fix the 9router automation runtime at ${getAutomationRuntimeDir()}, then restart and retry.`
+      `Fix the grouter automation runtime at ${getAutomationRuntimeDir()}, then restart and retry.`
     );
     error.code = "PLAYWRIGHT_PACKAGE_MISSING";
     return { ok: false, error };
@@ -252,7 +252,7 @@ function ensurePlaywrightRuntime({ silent = false, timeout } = {}) {
   cachedReady = false;
   const error = new Error(
     `Playwright Chromium not available. ${result.reason}. ` +
-    `Fix the 9router automation runtime at ${getAutomationRuntimeDir()}, then restart and retry.`
+    `Fix the grouter automation runtime at ${getAutomationRuntimeDir()}, then restart and retry.`
   );
   error.code = "PLAYWRIGHT_CHROMIUM_MISSING";
   return { ok: false, error };

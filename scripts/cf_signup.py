@@ -949,7 +949,7 @@ def main():
     parser.add_argument("--email", required=True)
     parser.add_argument("--password", required=True)
     parser.add_argument("--mail-api", default="", help="CF Email Worker URL for verification")
-    parser.add_argument("--token-name", default="9router-workers-ai", help="API token name")
+    parser.add_argument("--token-name", default="grouter-workers-ai", help="API token name")
     parser.add_argument("--proxy", default=None)
     parser.add_argument("--headless", action="store_true")
     parser.add_argument("--engine", choices=["chromium", "cloakbrowser", "nodriver"], default="cloakbrowser",
