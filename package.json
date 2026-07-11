@@ -10,7 +10,7 @@
     "lint:reacthooks": "node scripts/lint-reacthooks.cjs",
     "lint": "eslint . --no-warn-ignored",
     "build": "next build --webpack",
-    "start": "next start --port 20127",
+    "start": "next start --port 3003",
     "dev:bun": "bun --bun next dev --webpack --port 20127",
     "build:bun": "bun --bun next build --webpack",
     "start:bun": "bun ./.next/standalone/server.js",
