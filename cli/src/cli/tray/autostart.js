@@ -4,7 +4,7 @@ const os = require("os");
 const { execSync } = require("child_process");
 
 const APP_NAME = "9router";
-const APP_LABEL = "com.9router.autostart";
+const APP_LABEL = "com.grouter.autostart";
 
 /**
  * Resolve the absolute path to this package's cli.js.
@@ -182,9 +182,9 @@ function enableMacOS(cliPath) {
     <key>KeepAlive</key>
     <false/>
     <key>StandardOutPath</key>
-    <string>/tmp/9router.log</string>
+    <string>/tmp/grouter.log</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/9router.error.log</string>
+    <string>/tmp/grouter.error.log</string>
 </dict>
 </plist>`;
 

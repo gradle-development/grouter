@@ -127,3 +127,4 @@ next-env.d.ts
 .graphifyignore
 graphify-out/*
 .next-analyze/*
+*Zone.Identifier

@@ -91,10 +91,10 @@ const readConfigParsed = async () => {
   return parsedToWritable(parseTOML(raw));
 };
 
-// Check if config has 9Router settings
-const has9RouterConfig = (config) => {
+// Check if config has Grouter settings
+const hasGrouterConfig = (config) => {
   if (!config) return false;
-  return config.includes("model_provider = \"9router\"") || config.includes("[model_providers.9router]");
+  return config.includes("model_provider = \"grouter\"") || config.includes("[model_providers.grouter]");
 };
 
 // GET - Check codex CLI and read current settings
@@ -115,7 +115,7 @@ export async function GET() {
     return NextResponse.json({
       installed: true,
       config,
-      has9Router: has9RouterConfig(config),
+      has9Router: hasGrouterConfig(config),
       configPath: getCodexConfigPath(),
     });
   } catch (error) {
@@ -141,15 +141,15 @@ export async function POST(request) {
     // Read and parse existing config
     let parsed = (await readConfigParsed()) || {};
 
-    // Update only 9Router related fields (api_key goes to auth.json, not config.toml)
+    // Update only Grouter related fields (api_key goes to auth.json, not config.toml)
     parsed.model = model;
-    parsed.model_provider = "9router";
+    parsed.model_provider = "grouter";
 
-    // Update or create 9router provider section (no api_key - Codex reads from auth.json)
+    // Update or create grouter provider section (no api_key - Codex reads from auth.json)
     // Ensure /v1 suffix is added only once
     const normalizedBaseUrl = baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
-    setNestedSection(parsed, "model_providers.9router", {
-      name: "9Router",
+    setNestedSection(parsed, "model_providers.grouter", {
+      name: "Grouter",
       base_url: normalizedBaseUrl,
       wire_api: "responses",
     });
@@ -230,7 +230,7 @@ export async function DELETE() {
 
     return NextResponse.json({
       success: true,
-      message: "9Router settings removed successfully",
+      message: "Grouter settings removed successfully",
     });
   } catch (error) {
     return NextResponse.json({ error: "Failed to reset codex settings" }, { status: 500 });

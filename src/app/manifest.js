@@ -1,7 +1,7 @@
 export default function manifest() {
   return {
-    name: 'VansAI - AI Infrastructure Management',
-    short_name: 'VansAI',
+    name: 'Grouter - AI Infrastructure Management',
+    short_name: 'Grouter',
     description: 'One endpoint for all your AI providers. Manage keys, monitor usage, and scale effortlessly.',
     start_url: '/',
     display: 'standalone',

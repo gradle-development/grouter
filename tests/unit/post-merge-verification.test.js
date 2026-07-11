@@ -106,11 +106,11 @@ describe("Post-merge: model.js RESERVED_PROVIDER_PREFIXES works", () => {
   });
 });
 
-describe("Post-merge: layout.js VansAI branding preserved", () => {
+describe("Post-merge: layout.js Grouter branding preserved", () => {
   const src = read("src/app/layout.js");
 
-  it("has VansAI title", () => {
-    expect(src).toContain("VansAI");
+  it("has Grouter title", () => {
+    expect(src).toContain("Grouter");
   });
 
   it("has upstream font loading script", () => {
@@ -120,7 +120,7 @@ describe("Post-merge: layout.js VansAI branding preserved", () => {
   it("does NOT have upstream 9Router title", () => {
     // Should not contain "9Router - AI Infrastructure"
     const titleMatch = src.match(/title:\s*["']([^"']+)["']/);
-    expect(titleMatch[1]).toContain("VansAI");
+    expect(titleMatch[1]).toContain("Grouter");
     expect(titleMatch[1]).not.toContain("9Router");
   });
 });

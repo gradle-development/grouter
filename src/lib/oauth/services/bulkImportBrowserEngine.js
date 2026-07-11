@@ -182,7 +182,7 @@ async function launchChromium({ proxyUrl, headless = true, args = [] } = {}) {
     const installedRuntimePlaywright = loadRuntimePlaywright(runtime);
     if (!installedRuntimePlaywright?.chromium) {
       const err = new Error(
-        "Playwright installed into the 9router automation runtime, but Node could not load it. Restart wyxrouter and retry."
+        "Playwright installed into the grouter automation runtime, but Node could not load it. Restart wyxrouter and retry."
       );
       err.code = "PLAYWRIGHT_PACKAGE_MISSING";
       throw err;
@@ -246,7 +246,7 @@ async function launchCamoufox({ proxyUrl, headless = true, args = [] } = {}) {
     const installed = runtime.installCamoufoxOnly({ silent: false });
     if (!installed.ok) {
       const err = new Error(
-        `Camoufox auto-install failed: ${installed.reason}. Restart 9router and retry, or switch back to the Chromium engine.`
+        `Camoufox auto-install failed: ${installed.reason}. Restart Grouter and retry, or switch back to the Chromium engine.`
       );
       err.code = "CAMOUFOX_INSTALL_FAILED";
       throw err;

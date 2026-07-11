@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Cross-platform production start for the VansAI app.
+// Cross-platform production start for the Grouter app.
 //
 // Why this wrapper exists:
 //   The Next.js standalone server binds to HOSTNAME (default 0.0.0.0 = all

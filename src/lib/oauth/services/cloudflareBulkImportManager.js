@@ -426,7 +426,7 @@ async function createCloudflareTokenFromDashboard(page, preferredAccountId, toke
   if (!accountId) throw new Error("Could not determine Cloudflare account ID from dashboard URL");
   onStep?.("account_id_found", `Found Cloudflare account ID: ${accountId.slice(0, 8)}...`);
 
-  const finalTokenName = tokenName || `9router-workers-ai-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}`;
+  const finalTokenName = tokenName || `grouter-workers-ai-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}`;
 
   onStep?.("navigating_to_api_quick_start", "Navigating to Workers AI API quick start page");
   await page.goto(`https://dash.cloudflare.com/${accountId}/ai/workers-ai/api-quick-start`, {
@@ -1230,7 +1230,7 @@ export class CloudflareBulkImportManager extends KiroBulkImportManager {
         const proxyUrl = job.proxyUrl || null;
         const pyHeadless = job?.headless ?? false;
         const engine = job?.engine || "cloakbrowser";
-        const tokenName = meta.name || `9router-workers-ai-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}`;
+        const tokenName = meta.name || `grouter-workers-ai-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}`;
         const pyResult = await signupCloudflareViaPython(
           address, realPassword, proxyUrl, pyHeadless, job.mailApi, tokenName, engine,
           (step, message) => this.setAccountStep(account, step, message),

@@ -120,7 +120,7 @@ export default function CopilotToolCard({ tool, isExpanded, onToggle, baseUrl, a
   const [selectedModelsOverride, setSelectedModels] = useState(null);
   const derivedModels = useMemo(() => {
     if (status?.config && Array.isArray(status.config)) {
-      const entry = status.config.find((e) => e.name === "9Router");
+      const entry = status.config.find((e) => e.name === "Grouter");
       if (entry?.models?.length > 0) return entry.models.map((m) => m.id);
     }
     return [];
@@ -179,7 +179,7 @@ export default function CopilotToolCard({ tool, isExpanded, onToggle, baseUrl, a
     try {
       const keyToUse = (selectedApiKey && selectedApiKey.trim())
         ? selectedApiKey
-        : (!cloudEnabled ? "sk_9router" : selectedApiKey);
+        : (!cloudEnabled ? "sk_grouter" : selectedApiKey);
       await fetch("/api/cli-tools/copilot-settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -211,7 +211,7 @@ export default function CopilotToolCard({ tool, isExpanded, onToggle, baseUrl, a
     try {
       const keyToUse = (selectedApiKey && selectedApiKey.trim())
         ? selectedApiKey
-        : (!cloudEnabled ? "sk_9router" : selectedApiKey);
+        : (!cloudEnabled ? "sk_grouter" : selectedApiKey);
 
       const res = await fetch("/api/cli-tools/copilot-settings", {
         method: "POST",
@@ -250,14 +250,14 @@ export default function CopilotToolCard({ tool, isExpanded, onToggle, baseUrl, a
   const getManualConfigs = () => {
     const keyToUse = (selectedApiKey && selectedApiKey.trim())
       ? selectedApiKey
-      : (!cloudEnabled ? "sk_9router" : "<API_KEY_FROM_DASHBOARD>");
+      : (!cloudEnabled ? "sk_grouter" : "<API_KEY_FROM_DASHBOARD>");
     const effectiveBaseUrl = getEffectiveBaseUrl();
     const modelsToShow = selectedModels.length > 0 ? selectedModels : ["provider/model-id"];
 
     return [{
       filename: "~/Library/Application Support/Code/User/chatLanguageModels.json",
       content: JSON.stringify([{
-        name: "9Router",
+        name: "Grouter",
         vendor: "azure",
         apiKey: keyToUse,
         models: modelsToShow.map((id) => ({

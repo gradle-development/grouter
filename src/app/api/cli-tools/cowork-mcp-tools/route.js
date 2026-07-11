@@ -22,7 +22,7 @@ async function probeMcp(url) {
       redirect: "manual",
       body: JSON.stringify({
         jsonrpc: "2.0", id: 1, method: "initialize",
-        params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "9router", version: "1" } },
+        params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "grouter", version: "1" } },
       }),
       signal: ac.signal,
     });

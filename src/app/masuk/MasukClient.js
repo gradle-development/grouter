@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useReducer } from "react";
+import Image from "next/image";
 import { Card, Button, Input } from "@/shared/components";
 import { useRouter } from "next/navigation";
 
@@ -82,14 +83,9 @@ export default function MasukClient({ initialAuth }) {
       <div className="relative z-10 w-full max-w-md">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
-            <svg viewBox="0 0 32 32" className="w-12 h-12" fill="none">
-              <path d="M16 5L22 14L16 27L10 14L16 5Z" fill="#6366f1" opacity="0.9"/>
-              <path d="M10 14L16 27L10 20L6 14H10Z" fill="#6366f1" opacity="0.6"/>
-              <path d="M22 14L16 27L22 20L26 14H22Z" fill="#6366f1" opacity="0.6"/>
-              <circle cx="16" cy="9" r="2" fill="#6366f1"/>
-            </svg>
+            <Image src="/grouter.png" alt="Grouter" width={48} height={48} className="rounded-lg" unoptimized />
           </div>
-          <h1 className="text-3xl font-bold text-primary mb-2">VansAI</h1>
+          <h1 className="text-3xl font-bold text-primary mb-2">Grouter</h1>
           <p className="text-text-muted">
             {authMode === "oidc" && oidcConfigured
               ? "Masuk dengan OIDC provider untuk mengakses dashboard"

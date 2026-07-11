@@ -1,3 +1,15 @@
+# v0.9.1 (2026-07-11)
+
+VansRouter 0.9.1 fixes the `content-blocked` fallback locking loop, aligns `agentrouter` headers dynamically to bypass WAF edge blocks (405), and includes recent fixes for Responses API compatibility, usage tracking, and CI/lint configurations.
+
+## Added
+- **AgentRouter Dynamic Wire Image** — Spoofs Claude Code SDK headers dynamically, matching dynamic user agent and lowercase version/beta headers, and appends `?beta=true` to bypass WAF edge blocks (405).
+
+## Fixed
+- **Content-Blocked Fallback Loop** — Prevents error status 400 containing `content-blocked` or `content_blocked` from locking the provider account. The moderation error is surfaced directly to the client instead of triggering endless fallback loops.
+- **Responses API / Usage Tracking** — Fixes Responses API compatibility for AI SDKs and usage tracking for Antigravity/Gemini streaming responses.
+- **CI & Linting** — Fixes pnpm v10 hoisting on CI runners and undef lint configurations.
+
 # v0.9.0 (2026-07-11)
 
 VansRouter 0.9.0 delivers a major sync with upstream v0.5.30, adds experimental PXPIPE token saver (multimodal prompt compression), integrates Perplexity Agent / Grok CLI / Featherless providers, and resolves critical packaging, environment, and streaming regressions.
