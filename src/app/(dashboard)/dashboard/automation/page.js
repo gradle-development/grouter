@@ -14,6 +14,8 @@ import {
   Modal,
   OAuthModal,
   AutoclawAutomationModal,
+  GrokRegisterModal,
+  GrokSsoImportModal,
 } from "@/shared/components";
 import ProviderIcon from "@/shared/components/ProviderIcon";
 import { FREE_PROVIDERS } from "@/shared/constants/providers";
@@ -481,6 +483,46 @@ function CloudflareAutomationPanel({ onRefresh }) {
   );
 }
 
+function GrokAutomationPanel({ onRefresh }) {
+  const [isRegisterOpen, setIsRegisterOpen] = useState(false);
+  const [isSsoOpen, setIsSsoOpen] = useState(false);
+
+  return (
+    <>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <button type="button" onClick={() => setIsRegisterOpen(true)} className="text-left">
+          <Card
+            hover
+            padding="md"
+            icon="person_add"
+            title="Auto Register"
+            subtitle="Temp-email signup → CPA device OAuth mint → save grok-cli only. No grok-web. Python: python -m grokreg --enable-cpa."
+          />
+        </button>
+        <button type="button" onClick={() => setIsSsoOpen(true)} className="text-left">
+          <Card
+            hover
+            padding="md"
+            icon="login"
+            title="Import SSO"
+            subtitle="Bulk paste email|password|sso → CPA mint → save grok-cli OAuth. Job progress like Auto Register."
+          />
+        </button>
+      </div>
+      <GrokRegisterModal
+        isOpen={isRegisterOpen}
+        onSuccess={onRefresh}
+        onClose={() => setIsRegisterOpen(false)}
+      />
+      <GrokSsoImportModal
+        isOpen={isSsoOpen}
+        onClose={() => setIsSsoOpen(false)}
+        onSuccess={onRefresh}
+      />
+    </>
+  );
+}
+
 const AUTOMATION_PROVIDERS = [
   {
     id: "kiro",
@@ -531,6 +573,15 @@ const AUTOMATION_PROVIDERS = [
     supportedModes: ["google-register", "cloudflare-login", "token-import", "workers-ai-test", "bluk-cf-import"],
     component: CloudflareAutomationPanel,
   },
+  {
+    id: "grok-cli",
+    label: "Grok CLI",
+    icon: "smart_toy",
+    iconSrc: "/providers/grok-cli.webp",
+    description: "xAI Grok auto-register → CPA mint → grok-cli OAuth. Or import existing SSO (email/password/sso) → mint.",
+    supportedModes: ["auto-register", "import-sso", "cpa-mint"],
+    component: GrokAutomationPanel,
+  },
 ];
 
 function TabIcon({ provider, className = "" }) {
@@ -554,10 +605,23 @@ function TabIcon({ provider, className = "" }) {
   );
 }
 
+const AUTOMATION_PROVIDER_STORAGE_KEY = "automation.activeProviderId";
+
+function getInitialAutomationProviderId() {
+  if (typeof window === "undefined") return AUTOMATION_PROVIDERS[0].id;
+  try {
+    const saved = window.localStorage.getItem(AUTOMATION_PROVIDER_STORAGE_KEY);
+    if (AUTOMATION_PROVIDERS.some((provider) => provider.id === saved)) return saved;
+  } catch {
+    // ignore storage errors
+  }
+  return AUTOMATION_PROVIDERS[0].id;
+}
+
 export default function AutomationPage() {
   const [connections, setConnections] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeProviderId, setActiveProviderId] = useState(AUTOMATION_PROVIDERS[0].id);
+  const [activeProviderId, setActiveProviderId] = useState(getInitialAutomationProviderId);
 
   const fetchConnections = useCallback(async () => {
     try {
@@ -579,16 +643,20 @@ export default function AutomationPage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const requestedProvider = new URLSearchParams(window.location.search).get("provider");
-    console.log("[Automation Page] URL search params:", window.location.search);
-    console.log("[Automation Page] Requested provider:", requestedProvider);
     if (AUTOMATION_PROVIDERS.some((provider) => provider.id === requestedProvider)) {
-      console.log("[Automation Page] Setting active provider to:", requestedProvider);
       // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time URL→state sync on mount
       setActiveProviderId(requestedProvider);
-    } else {
-      console.log("[Automation Page] Provider not found, using default:", AUTOMATION_PROVIDERS[0].id);
     }
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(AUTOMATION_PROVIDER_STORAGE_KEY, activeProviderId);
+    } catch {
+      // ignore storage errors
+    }
+  }, [activeProviderId]);
 
   const activeProvider = AUTOMATION_PROVIDERS.find((provider) => provider.id === activeProviderId) || AUTOMATION_PROVIDERS[0];
   const providerInfo = FREE_PROVIDERS[activeProvider.id] || { id: activeProvider.id, name: activeProvider.label };

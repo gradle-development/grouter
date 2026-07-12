@@ -209,31 +209,40 @@ python3 -m autoclaw user@gmail.com pass123 --engine cloakbrowser --proxy socks5:
 
 ---
 
-## ☁️ Cloudflare Worker
+## ☁️ Cloudflare Worker (temp mail / Email Routing)
 
-Grouter ships with a Cloudflare Email Inbox Worker for catch-all email routing — used by OAuth account creation flows.
+Two mail backends. Pick by automation flow:
 
-### Deploy
+| Goal | Backend | API shape |
+|------|---------|-----------|
+| **Cloudflare AI** disposable signup | In-repo `cf-workers/` (this section) | `/api/address`, `/api/messages` |
+| **Grok** auto-register | External [cloudflare_temp_email](https://github.com/dreamhunter2333/cloudflare_temp_email) | `/api/new_address`, `/api/mails` |
+
+### A) In-repo worker — CF Email Routing catch-all
+
+Used by **Automation → Cloudflare AI → Disposable Email Signup** (`cf-email` mode). Domain must be on Cloudflare.
+
+#### 1. Domain
+
+Cloudflare Dashboard → your domain → **Email** → **Email Routing** → enable.
+
+#### 2. KV namespace
 
 ```bash
 cd cf-workers
-npx wrangler deploy
+npx wrangler login
+npx wrangler kv namespace create INBOX
 ```
 
-### What It Does
+Copy the printed `id` into `cf-workers/wrangler.jsonc`:
 
-- Catch-all email inbox via Cloudflare Email Routing + KV
-- Creates disposable addresses (`cf-xxx@yourdomain.com`)
-- API: `GET /api/messages?addr=xxx` to read inbox
-
-### Configuration
-
-Edit `cf-workers/wrangler.jsonc`:
 ```jsonc
 {
-  "name": "grouter-email-inbox",
+  "name": "9router-email-inbox",
+  "main": "email-inbox-worker.js",
+  "compatibility_date": "2025-01-01",
   "kv_namespaces": [
-    { "binding": "INBOX", "id": "your-kv-id" }
+    { "binding": "INBOX", "id": "PASTE_KV_ID_HERE" }
   ],
   "vars": {
     "DOMAIN": "yourdomain.com"
@@ -241,7 +250,68 @@ Edit `cf-workers/wrangler.jsonc`:
 }
 ```
 
-Set `CLOUDFLARE_API_TOKEN` in `cf-workers/.env`.
+#### 3. Token + deploy
+
+```bash
+# cf-workers/.env  (do not commit)
+CLOUDFLARE_API_TOKEN=your_token_with_workers_edit
+
+npx wrangler deploy
+```
+
+Worker URL looks like `https://9router-email-inbox.<account>.workers.dev` (or your custom route).
+
+#### 4. Email Routing → Worker
+
+Dashboard → domain → **Email Routing** → **Routing rules** → Catch-all → **Send to a Worker** → select the deployed worker.
+
+#### 5. Smoke test
+
+```bash
+# generate address
+curl "https://YOUR-WORKER.workers.dev/api/address?domain=yourdomain.com"
+
+# send a test mail to that address, then:
+curl "https://YOUR-WORKER.workers.dev/api/messages?addr=cf-xxx@yourdomain.com"
+```
+
+API:
+
+| Method | Path | Returns |
+|--------|------|---------|
+| `GET` | `/api/address?domain=&local=` | `{address}` |
+| `GET` | `/api/messages?addr=` | `[{from,subject,text,html,receivedAt}]` |
+| `GET` | `/api/messages/:id/raw?addr=` | `{html}` |
+| `DELETE` | `/api/messages?addr=` | clear inbox |
+
+#### 6. Dashboard
+
+**Automation → Cloudflare AI → Disposable Email Signup → CF Email Routing**
+
+- **Worker URL** = deploy URL  
+- **Domain** = `yourdomain.com`
+
+### B) Grok auto-register temp mail
+
+Grok (`python -m grokreg` / **Automation → Grok**) does **not** use the in-repo worker as-is. It expects a [cloudflare_temp_email](https://github.com/dreamhunter2333/cloudflare_temp_email)-compatible API:
+
+| Path | Role |
+|------|------|
+| `POST /api/new_address` | create inbox → `{address, jwt}` |
+| `GET /api/mails` | list mail (JWT) |
+
+Deploy that project (or compatible fork) separately, then:
+
+```bash
+PYTHONPATH=scripts/python python3 -m grokreg register \
+  --mail-provider cloudflare \
+  --cloudflare-api-base "https://your-temp-mail-worker.example.com" \
+  --domain "mail.example.com"
+```
+
+Or in the Grok modal: **CF Mail API Base** + **Default Domain(s)** (+ optional admin key / auth mode).
+
+Env shortcuts: `GROK_CF_MAIL_API`, `GROK_MAIL_DOMAIN`, `GROK_CF_MAIL_KEY`, `GROK_CF_MAIL_AUTH`.
 
 ---
 

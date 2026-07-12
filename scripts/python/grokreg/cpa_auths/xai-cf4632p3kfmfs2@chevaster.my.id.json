@@ -1,0 +1,23 @@
+{
+  "type": "xai",
+  "access_token": "eyJ0eXAiOiJhdCtqd3QiLCJhbGciOiJFUzI1NiIsImtpZCI6Im9hdXRoMi1wcm9kdWN0aW9uLTIwMjYtMDItMTkifQ.eyJpc3MiOiJodHRwczovL2F1dGgueC5haSIsInN1YiI6ImFkYTk0MjczLTUzZDktNDBlNy04ZjNhLWRjYjc5ODQ3MjJlNiIsImF1ZCI6ImIxYTAwNDkyLTA3M2EtNDdlYS04MTZmLTRjMzI5MjY0YTgyOCIsImV4cCI6MTc4Mzg5OTg1MSwiaWF0IjoxNzgzODc4MjUxLCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIGVtYWlsIG9mZmxpbmVfYWNjZXNzIGdyb2stY2xpOmFjY2VzcyBhcGk6YWNjZXNzIiwicHJpbmNpcGFsX3R5cGUiOiJVc2VyIiwicHJpbmNpcGFsX2lkIjoiYWRhOTQyNzMtNTNkOS00MGU3LThmM2EtZGNiNzk4NDcyMmU2IiwiY2xpZW50X2lkIjoiYjFhMDA0OTItMDczYS00N2VhLTgxNmYtNGMzMjkyNjRhODI4IiwianRpIjoiOTUxM2QxMzUtMTI3MS00ZWMzLThiZWYtOGEyYTJjNjI3OThkIiwidGVhbV9pZCI6IjgyOGViZDFkLTQ5NzktNDI2NC1iN2JmLThmMjMyZTM4N2Y0ZSJ9.FOJ9l0lMDkHCnM6pIxKEWOSIkrisyXvtN4w7ahoAUrIORWMSRIgpG3JnhHWTRNIkE6eDJ_MSFOZc9VZnU_ce9Q",
+  "refresh_token": "QIo9xqXEhjrUgNzf4uutoP1508yhODjMcn_MepW-QGKoZ_OuBnQJKRS64PR_cc_mYAPe-WI_QubZ7EHRuF3-wQ",
+  "token_type": "Bearer",
+  "expires_in": 21600,
+  "expired": "2026-07-12T23:44:11Z",
+  "last_refresh": "2026-07-12T17:44:09Z",
+  "email": "cf4632p3kfmfs2@chevaster.my.id",
+  "sub": "ada94273-53d9-40e7-8f3a-dcb7984722e6",
+  "base_url": "https://cli-chat-proxy.grok.com/v1",
+  "redirect_uri": "http://127.0.0.1:56121/callback",
+  "token_endpoint": "https://auth.x.ai/oauth2/token",
+  "auth_kind": "oauth",
+  "id_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiIsImtpZCI6Im9hdXRoMi1wcm9kdWN0aW9uLTIwMjYtMDItMTkifQ.eyJpc3MiOiJodHRwczovL2F1dGgueC5haSIsInN1YiI6ImFkYTk0MjczLTUzZDktNDBlNy04ZjNhLWRjYjc5ODQ3MjJlNiIsImF1ZCI6ImIxYTAwNDkyLTA3M2EtNDdlYS04MTZmLTRjMzI5MjY0YTgyOCIsImV4cCI6MTc4Mzg5OTg1MSwiaWF0IjoxNzgzODc4MjUxLCJnaXZlbl9uYW1lIjoiQWxleCIsImZhbWlseV9uYW1lIjoiQ2FvIiwiZW1haWwiOiJjZjQ2MzJwM2tmbWZzMkBjaGV2YXN0ZXIubXkuaWQiLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZX0.0_wvBgYsb4rQIPA3nK9nIdsECFxIAShk7yvje2sUJRmAFu-yrqOrSOKnTSFXG-g5JdngZKg_cIHFH59rFXlttg",
+  "headers": {
+    "x-grok-client-version": "0.2.93",
+    "x-xai-token-auth": "xai-grok-cli",
+    "x-authenticateresponse": "authenticate-response",
+    "x-grok-client-identifier": "grok-shell",
+    "User-Agent": "grok-shell/0.2.93 (linux; x86_64)"
+  }
+}

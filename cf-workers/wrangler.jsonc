@@ -1,13 +1,20 @@
 {
-  "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
-  "name": "9router-email-inbox",
-  "main": "email-inbox-worker.js",
-  "compatibility_date": "2025-01-01",
-  "observability": { "enabled": true },
-  "kv_namespaces": [
-    { "binding": "INBOX", "id": "f7f3452290424126854357b20f039d8a" }
-  ],
-  "vars": {
-    "DOMAIN": "tandatangan.io"
-  }
+	"$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+	"name": "grouter-email-inbox",
+	"main": "email-inbox-worker.js",
+	"compatibility_date": "2025-01-01",
+	"observability": {
+		"enabled": true
+	},
+	"kv_namespaces": [
+		{
+			"binding": "INBOX",
+			"id": "01225d66a92348c9b96b0b97b072cc13"
+		}
+	],
+	"vars": {
+		// Single fallback domain when /api/address is called without ?domain=
+		// Multi-domain: pass each domain via ?domain= or dashboard mailDomains list.
+		"DOMAIN": "chevaster.my.id"
+	}
 }

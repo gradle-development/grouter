@@ -43,6 +43,9 @@ export const CodeBuddyCnPhoneAutomationModal = lazyModal(() => import("./CodeBud
 export const AutoclawAutomationModal = lazyModal(() => import("./AutoclawAutomationModal"));
 export const CloudflareTokenImportModal = lazyModal(() => import("./CloudflareTokenImportModal"));
 export const CloudflareDisposableImportModal = lazyModal(() => import("./CloudflareDisposableImportModal"));
+export const GrokRegisterModal = lazyModal(() => import("./GrokRegisterModal"));
+export const GrokTokenImportModal = lazyModal(() => import("./GrokTokenImportModal"));
+export const GrokSsoImportModal = lazyModal(() => import("./GrokSsoImportModal"));
 
 export { default as UsageStats } from "./UsageStats";
 export { default as LanguageSwitcher } from "./LanguageSwitcher";
