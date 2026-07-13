@@ -1,5 +1,5 @@
 packages:
-  - "."
+  - .
 
 allowBuilds:
   better-sqlite3: true
@@ -8,24 +8,26 @@ allowBuilds:
   unrs-resolver: true
   workerd: true
 
-# Supply-chain hardening (see react-doctor require-pnpm-hardening):
-# minimumReleaseAge delays installs of freshly-published versions (minutes; 10080 = 7 days)
-# so malware caught & unpublished within hours never gets installed.
-# trustPolicy: no-downgrade rejects packages whose provenance/signature weakens between updates.
 minimumReleaseAge: 10080
+
 minimumReleaseAgeExclude:
   - next
-  - "@next/*"
+  - '@next/*'
   - dompurify
 
 onlyBuiltDependencies:
+  - better-sqlite3
   - esbuild
+  - sharp
+  - unrs-resolver
   - workerd
 
 pnpm:
   requiredScripts:
     - build
+
 trustPolicy: no-downgrade
+
 trustPolicyExclude:
   - react-redux
   - reselect
