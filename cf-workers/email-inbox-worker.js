@@ -78,7 +78,9 @@ export default {
 
     if (method === "GET" && url.pathname === "/api/address") {
       const local = url.searchParams.get("local") || randomLocal();
-      const domain = env.DOMAIN || url.searchParams.get("domain") || "tandatangan.io";
+      // Prefer ?domain= so one worker serves many Email Routing domains from the UI.
+      const domain =
+        url.searchParams.get("domain") || env.DOMAIN || "tandatangan.io";
       const address = `${local}@${domain}`;
       return Response.json({ address });
     }

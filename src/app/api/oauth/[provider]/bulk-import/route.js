@@ -26,12 +26,26 @@ export async function POST(request, { params }) {
 
     const jobArgs = spec.normalizeStartArgs(body, resolvedProxy);
 
-    if (spec.parseAccounts && provider !== "cloudflare-ai") {
+    // cloudflare-ai signupMode + grok-cli registerCount create placeholder accounts in manager.
+    const skipAccountParse =
+      provider === "cloudflare-ai" ||
+      (provider === "grok-cli" && Number(body?.registerCount) > 0);
+
+    if (spec.parseAccounts && !skipAccountParse) {
       const accounts = Array.isArray(body?.accounts) ? body.accounts : [];
       const { parsed, invalidLines } = await spec.parseAccounts(accounts);
 
+      const formatHint =
+        provider === "grok-cli"
+          ? "email|password|sso or access_token|refresh_token"
+          : "email@gmail.com|password";
+
       if (!parsed.length) {
-        const payload = { error: invalidLines.length > 0 ? "Invalid account format. Use one account per line: email@gmail.com|password" : "At least one account entry is required" };
+        const payload = {
+          error: invalidLines.length > 0
+            ? `Invalid account format. Use one account per line: ${formatHint}`
+            : "At least one account entry is required",
+        };
         if (invalidLines.length > 0) payload.invalidLines = invalidLines;
         return NextResponse.json(payload, { status: 400 });
       }
@@ -39,7 +53,7 @@ export async function POST(request, { params }) {
       if (invalidLines.length > 0) {
         return NextResponse.json(
           {
-            error: "Invalid account format. Use one account per line: email@gmail.com|password",
+            error: `Invalid account format. Use one account per line: ${formatHint}`,
             invalidLines,
           },
           { status: 400 }

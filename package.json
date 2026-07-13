@@ -9,7 +9,7 @@
     "lint:undef": "node scripts/lint-undef.cjs",
     "lint:reacthooks": "node scripts/lint-reacthooks.cjs",
     "lint": "eslint . --no-warn-ignored",
-    "build": "next build --webpack",
+    "build": "node scripts/build.js",
     "start": "next start --port 3003",
     "dev:bun": "bun --bun next dev --webpack --port 20127",
     "build:bun": "bun --bun next build --webpack",
