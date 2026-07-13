@@ -28,6 +28,7 @@ cli/.build-home/
 !.env.example
 .kiro/steering/secrets.md
 .npmrc
+scripts/python/grokreg/cpa_auths/
 
 # =============================================================================
 # IDE & editor
