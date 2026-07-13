@@ -85,6 +85,29 @@ describe("markAccountUnavailable 429 cooldown classification", () => {
     expect(result.cooldownMs).toBe(2 * 60 * 1000);
   });
 
+  it("disables grok-cli account on free-usage-exhausted 429", async () => {
+    const result = await markAccountUnavailable(
+      "conn-1", 429, "subscription:free-usage-exhausted", "grok-cli", "grok-3"
+    );
+    expect(result.shouldFallback).toBe(true);
+    expect(result.cooldownMs).toBe(3_600_000);
+
+    const update = updateProviderConnection.mock.calls[0][1];
+    expect(update.isActive).toBe(false);
+    expect(update.rateLimitedUntil).toBeDefined();
+    expect(update.testStatus).toBe("unavailable");
+  });
+
+  it("does not disable other providers on quota exhausted 429", async () => {
+    const result = await markAccountUnavailable(
+      "conn-1", 429, "subscription:free-usage-exhausted", "openai", "gpt-4o"
+    );
+    expect(result.shouldFallback).toBe(true);
+
+    const update = updateProviderConnection.mock.calls[0][1];
+    expect(update.isActive).toBeUndefined();
+  });
+
   it("still respects provider-specific resetsAtMs override", async () => {
     const resetsAtMs = Date.now() + 90_000;
     const result = await markAccountUnavailable(

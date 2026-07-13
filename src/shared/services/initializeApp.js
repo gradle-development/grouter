@@ -16,6 +16,7 @@ import {
 import { getMitmStatus, startMitm, loadEncryptedPassword, initDbHooks, restoreToolDNS, removeAllDNSEntriesSync } from "@/mitm/manager";
 import { startQuotaAutoPing } from "@/shared/services/quotaAutoPing";
 import { syncToJson as syncMitmAliasCache } from "@/lib/mitmAliasCache";
+import { startGrokCliReactivation } from "@/shared/services/grokCliReactivation.js";
 import { killAllBridges } from "@/lib/mcp/stdioSseBridge";
 
 // Inject correct paths and DB hooks into manager.js (CJS) from ESM context
@@ -107,6 +108,7 @@ async function runHeavyStartup() {
   startNetworkMonitor();
   autoStartMitm();
   startQuotaAutoPing();
+  startGrokCliReactivation();
 }
 
 async function autoStartMitm() {

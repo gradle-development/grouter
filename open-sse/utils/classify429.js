@@ -79,6 +79,9 @@ const QUOTA_EXHAUSTED_PATTERNS = [
   /402.*billing/i,
   /billing.*required/i,
   /payment.*required/i,
+  /free.?usage.?exhausted/i,
+  /included free usage/i,
+  /subscription:free-usage-exhausted/i,
 ];
 
 /**

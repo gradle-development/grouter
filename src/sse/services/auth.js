@@ -1,7 +1,7 @@
 import { getProviderConnections, validateApiKey, updateProviderConnection, getSettings, getProviderNodeById, getProxyPools } from "@/lib/localDb";
 import { resolveConnectionProxyConfig, pickProxyPoolId } from "@/lib/network/connectionProxy";
 import { formatRetryAfter, checkFallbackError, isModelLockActive, buildModelLockUpdate, getEarliestModelLockUntil } from "open-sse/services/accountFallback.js";
-import { classify429 } from "open-sse/utils/classify429.js";
+import { classify429, looksLikeQuotaExhausted } from "open-sse/utils/classify429.js";
 import { MAX_RATE_LIMIT_COOLDOWN_MS } from "open-sse/config/errorConfig.js";
 import { resolveProviderId, FREE_PROVIDERS, AI_PROVIDERS, getProviderAlias, isOpenAICompatibleProvider, isAnthropicCompatibleProvider, isCustomEmbeddingProvider } from "@/shared/constants/providers.js";
 import * as log from "../utils/logger.js";
@@ -212,6 +212,15 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
   }
 }
 
+// Grok CLI free-usage-exhausted is a terminal quota state: disable the account
+// so it is skipped by routing, and rely on the background reactivation job to
+// probe it periodically once the quota window resets.
+function looksLikeGrokCliFreeUsageExhausted(errorText) {
+  if (!errorText) return false;
+  const text = typeof errorText === "string" ? errorText : JSON.stringify(errorText);
+  return /free[-_]?usage[-_]?exhausted/i.test(text) || /subscription:free-usage-exhausted/i.test(text);
+}
+
 /**
  * Mark account+model as unavailable — locks modelLock_${model} in DB.
  * All errors (429, 401, 5xx, etc.) lock per model, not per account.
@@ -252,14 +261,24 @@ export async function markAccountUnavailable(connectionId, status, errorText, pr
   const reason = typeof errorText === "string" ? errorText.slice(0, 100) : "Provider error";
   const lockUpdate = buildModelLockUpdate(model, cooldownMs);
 
-  await updateProviderConnection(connectionId, {
+  const updatePayload = {
     ...lockUpdate,
     testStatus: "unavailable",
     lastError: reason,
     errorCode: status,
     lastErrorAt: new Date().toISOString(),
     backoffLevel: newBackoffLevel ?? backoffLevel
-  });
+  };
+
+  // Grok CLI free-usage-exhausted is a terminal quota state: disable the account
+  // so it is skipped by routing, and rely on the background reactivation job to
+  // probe it periodically once the quota window resets.
+  if (provider === "grok-cli" && looksLikeGrokCliFreeUsageExhausted(errorText)) {
+    updatePayload.isActive = false;
+    updatePayload.rateLimitedUntil = new Date(Date.now() + cooldownMs).toISOString();
+  }
+
+  await updateProviderConnection(connectionId, updatePayload);
 
   const lockKey = Object.keys(lockUpdate)[0];
   const connName = conn?.displayName || conn?.name || conn?.email || connectionId.slice(0, 8);
