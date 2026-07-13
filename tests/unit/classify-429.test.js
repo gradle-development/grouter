@@ -80,6 +80,16 @@ describe("classify429 — quota_exhausted", () => {
     const result = classify429({ status: 429, body: "Individual quota reached. Contact your administrator." });
     expect(result.kind).toBe("quota_exhausted");
   });
+
+  it("classifies grok-cli 'free-usage-exhausted' as quota_exhausted", () => {
+    const result = classify429({ status: 429, body: "subscription:free-usage-exhausted" });
+    expect(result.kind).toBe("quota_exhausted");
+  });
+
+  it("classifies grok-cli 'included free usage' as quota_exhausted", () => {
+    const result = classify429({ status: 429, body: "You've used all the included free usage" });
+    expect(result.kind).toBe("quota_exhausted");
+  });
 });
 
 describe("classify429 — daily_quota", () => {
