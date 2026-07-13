@@ -127,7 +127,6 @@ def _apply_config(args: argparse.Namespace) -> None:
     cfg["grok2api_auto_add_remote"] = False
     cfg["log_level"] = "info"
     if args.headless:
-        # DrissionPage has no true headless flag in this vendor; keep for future.
         cfg["cpa_headless"] = True
 
 
@@ -145,6 +144,7 @@ def run_register_once(
     yyds_jwt: str = "",
     enable_cpa: bool = False,
     enable_nsfw: bool = False,
+    headless: bool = False,
     cancel_callback=None,
 ) -> dict[str, Any]:
     """Register one Grok account. Returns status dict (not printed)."""
@@ -166,7 +166,7 @@ def run_register_once(
     args.yyds_jwt = yyds_jwt
     args.enable_cpa = enable_cpa
     args.enable_nsfw = enable_nsfw
-    args.headless = False
+    args.headless = headless
     _apply_config(args)
 
     def log_fn(msg: str) -> None:
@@ -525,6 +525,7 @@ def main() -> None:
         yyds_jwt=args.yyds_jwt or "",
         enable_cpa=bool(args.enable_cpa),
         enable_nsfw=bool(args.enable_nsfw),
+        headless=bool(args.headless),
     )
 
     _output(result)

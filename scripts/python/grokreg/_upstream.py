@@ -92,6 +92,7 @@ DEFAULT_CONFIG = {
     "log_level": "info",
     "speed_log_interval_sec": 60,
     "browser_path": "",
+    "headless": False,
 }
 
 config = DEFAULT_CONFIG.copy()
@@ -408,7 +409,7 @@ def cfworkers_create_temp_address(api_base):
     """适配 in-repo cf-workers/email-inbox-worker.js API. GET /api/address?domain=xxx&address=yyy → {address}"""
     domain = cloudflare_next_default_domain()
     name = generate_username()
-    path = f"/api/address?address={name}"
+    path = f"/api/address?local={name}"
     if domain:
         path += f"&domain={domain}"
     url = f"{api_base}{path}"
@@ -783,6 +784,13 @@ def create_browser_options():
                 options.set_user_agent(ua)
             except Exception:
                 options.set_argument(f"--user-agent={ua}")
+    if config.get("headless"):
+        # DrissionPage set_argument('--headless') converts to --headless=new which
+        # doesn't work with Playwright Chromium 1228. Use old headless mode directly.
+        options.set_argument("--headless", "false")
+        options._arguments = [a for a in options._arguments if "headless" not in a]
+        options._arguments.append("--headless")
+        options._is_headless = True
     if os.path.exists(EXTENSION_PATH):
         options.add_extension(EXTENSION_PATH)
     return options
@@ -1117,7 +1125,7 @@ def yyds_get_oai_code(
     token,
     address,
     timeout=180,
-    poll_interval=3,
+    poll_interval=1,
     log_callback=None,
     jwt=None,
     cancel_callback=None,
@@ -1481,7 +1489,7 @@ def duckmail_get_oai_code(
     dev_token,
     email,
     timeout=180,
-    poll_interval=3,
+    poll_interval=1,
     log_callback=None,
     cancel_callback=None,
 ):
@@ -1534,7 +1542,7 @@ def cloudflare_get_oai_code(
     dev_token,
     email,
     timeout=180,
-    poll_interval=3,
+    poll_interval=1,
     log_callback=None,
     cancel_callback=None,
     resend_callback=None,
@@ -1545,18 +1553,18 @@ def cloudflare_get_oai_code(
     deadline = time.time() + timeout
     # same email body may be delayed, allow multiple parse retries
     seen_attempts = {}
-    next_resend_at = time.time() + 35
+    next_resend_at = time.time() + 20
     while time.time() < deadline:
         raise_if_cancelled(cancel_callback)
         if resend_callback and time.time() >= next_resend_at:
             try:
                 resend_callback()
                 if log_callback:
-                    log_callback("[*] Triggered resend verification code")
+                    log_callback("[*] resent verification code")
             except Exception as exc:
                 if log_callback:
-                    log_callback(f"[Debug] Trigger resend verification code failed: {exc}")
-            next_resend_at = time.time() + 35
+                    log_callback(f"[Debug] resend failed: {exc}")
+            next_resend_at = time.time() + 20
         try:
             messages = cloudflare_get_messages(api_base, dev_token)
         except Exception as exc:
@@ -1635,7 +1643,7 @@ def cfworkers_get_oai_code(
     dev_token,
     email,
     timeout=180,
-    poll_interval=3,
+    poll_interval=1,
     log_callback=None,
     cancel_callback=None,
     resend_callback=None,
@@ -1646,7 +1654,7 @@ def cfworkers_get_oai_code(
         raise Exception("CF Email Routing API Base not configured")
     deadline = time.time() + timeout
     seen_ids = set()
-    next_resend_at = time.time() + 35
+    next_resend_at = time.time() + 20
     while time.time() < deadline:
         raise_if_cancelled(cancel_callback)
         if resend_callback and time.time() >= next_resend_at:
@@ -1656,8 +1664,8 @@ def cfworkers_get_oai_code(
                     log_callback("[*] resent verification code")
             except Exception as exc:
                 if log_callback:
-                    log_callback(f"[Debug] resend failed: {exc}")
-            next_resend_at = time.time() + 35
+                    log_callback(f"[Debug] Cloudflare trigger resend failed: {exc}")
+            next_resend_at = time.time() + 20
         try:
             messages = cfworkers_get_messages(api_base, email)
         except Exception as exc:

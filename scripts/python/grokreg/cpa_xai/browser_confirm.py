@@ -205,16 +205,12 @@ def create_standalone_page(
                 log(f"extension add failed: {e}")
 
     if headless:
-        try:
-            opts.headless(True)
-        except Exception:
-            opts.set_argument("--headless=new")
+        opts.set_argument("--headless", "false")
+        opts._arguments = [a for a in opts._arguments if "headless" not in a]
+        opts._arguments.append("--headless")
+        opts._is_headless = True
         log("headless=True (may hit Cloudflare / break real clicks)")
     else:
-        try:
-            opts.headless(False)
-        except Exception:
-            pass
         log(f"headed browser DISPLAY={os.environ.get('DISPLAY', '')!r}")
 
     for cand in (

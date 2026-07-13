@@ -536,6 +536,8 @@ export class GrokBulkImportManager extends KiroBulkImportManager {
     if (job.headless) args.push("--headless");
     if (job.enableNsfw) args.push("--enable-nsfw");
 
+    this.setAccountStep(account, "python_spawn", args.join(" "));
+
     const env = {
       ...process.env,
       PYTHONPATH: SCRIPT_DIR,

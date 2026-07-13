@@ -395,14 +395,6 @@ export default function GrokRegisterModal({ isOpen, onClose, onSuccess }) {
               </p>
             )}
 
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={onClose}>
-                Close
-              </Button>
-              <Button variant="primary" loading={importing} onClick={handleStart}>
-                Start
-              </Button>
-            </div>
           </>
         )}
 
