@@ -125,8 +125,8 @@ next-env.d.ts
 /.kimchi/
 /.understand-anything/
 
-# Refactor backup reference / graphify output (do not bundle/lint)
+# graphify — local knowledge graph (regenerate with /graphify; cache + HTML + graph.json not committed)
 .graphifyignore
-graphify-out/*
+graphify-out/
 .next-analyze/*
 *Zone.Identifier
