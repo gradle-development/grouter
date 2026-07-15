@@ -87,10 +87,11 @@ describe("markAccountUnavailable 429 cooldown classification", () => {
 
   it("disables grok-cli account on free-usage-exhausted 429", async () => {
     const result = await markAccountUnavailable(
-      "conn-1", 429, "subscription:free-usage-exhausted", "grok-cli", "grok-3"
+      "conn-1", 429, "subscription:free-usage-exhausted", "grok-cli", "grok-4.5"
     );
     expect(result.shouldFallback).toBe(true);
-    expect(result.cooldownMs).toBe(3_600_000);
+    // Rolling free-usage window → multi-hour lock (not generic 1h quota)
+    expect(result.cooldownMs).toBe(6 * 60 * 60 * 1000);
 
     const update = updateProviderConnection.mock.calls[0][1];
     expect(update.isActive).toBe(false);

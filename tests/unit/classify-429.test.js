@@ -81,14 +81,20 @@ describe("classify429 — quota_exhausted", () => {
     expect(result.kind).toBe("quota_exhausted");
   });
 
-  it("classifies grok-cli 'free-usage-exhausted' as quota_exhausted", () => {
+  it("classifies grok-cli 'free-usage-exhausted' as quota_exhausted with rolling cooldown", () => {
     const result = classify429({ status: 429, body: "subscription:free-usage-exhausted" });
     expect(result.kind).toBe("quota_exhausted");
+    // Rolling free-usage window is multi-hour, not the generic 1h quota lock
+    expect(result.cooldownMs).toBeGreaterThan(QUOTA_EXHAUSTED_COOLDOWN_MS);
   });
 
-  it("classifies grok-cli 'included free usage' as quota_exhausted", () => {
-    const result = classify429({ status: 429, body: "You've used all the included free usage" });
+  it("classifies grok-cli 'included free usage' as quota_exhausted with rolling cooldown", () => {
+    const result = classify429({
+      status: 429,
+      body: "You've used all the included free usage for model grok-4.5-build-free for now. Usage resets over a rolling 24-hour window",
+    });
     expect(result.kind).toBe("quota_exhausted");
+    expect(result.cooldownMs).toBeGreaterThan(QUOTA_EXHAUSTED_COOLDOWN_MS);
   });
 });
 

@@ -24,6 +24,11 @@
 export const RATE_LIMIT_COOLDOWN_MS = 60_000;
 /** Cooldown (ms) applied when a 429 is classified as quota exhaustion (~1h). */
 export const QUOTA_EXHAUSTED_COOLDOWN_MS = 3_600_000;
+/**
+ * Cooldown for rolling free-usage windows (Grok Build free tier is rolling 24h).
+ * 1h was too short — accounts re-probed every hour still over the token cap.
+ */
+export const ROLLING_FREE_USAGE_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 
 /**
  * Failure kinds returned by {@link classify429}.
@@ -79,9 +84,19 @@ const QUOTA_EXHAUSTED_PATTERNS = [
   /402.*billing/i,
   /billing.*required/i,
   /payment.*required/i,
+  // free-usage / included free usage handled by looksLikeRollingFreeUsage (longer cooldown)
+];
+
+/**
+ * Grok Build free tier and similar: included free usage on a *rolling* window
+ * (not calendar day, not monthly billing). Needs a multi-hour lock.
+ */
+const ROLLING_FREE_USAGE_PATTERNS = [
   /free.?usage.?exhausted/i,
   /included free usage/i,
   /subscription:free-usage-exhausted/i,
+  /rolling\s+\d+\s*-?\s*hour/i,
+  /usage resets over a rolling/i,
 ];
 
 /**
@@ -118,6 +133,13 @@ export function looksLikeQuotaExhausted(body) {
   const text = bodyToText(body);
   if (!text) return false;
   return QUOTA_EXHAUSTED_PATTERNS.some((pat) => pat.test(text));
+}
+
+/** Rolling free-usage window (e.g. Grok Build 24h token cap). */
+export function looksLikeRollingFreeUsage(body) {
+  const text = bodyToText(body);
+  if (!text) return false;
+  return ROLLING_FREE_USAGE_PATTERNS.some((pat) => pat.test(text));
 }
 
 /**
@@ -161,6 +183,10 @@ export function classify429(response) {
   // but locks until a precise boundary).
   if (looksLikeDailyQuota(response.body)) {
     return { kind: "daily_quota", cooldownMs: getMsUntilTomorrowMidnightUTC() };
+  }
+  // Grok free-usage is rolling 24h — lock longer than generic 1h quota.
+  if (looksLikeRollingFreeUsage(response.body)) {
+    return { kind: "quota_exhausted", cooldownMs: ROLLING_FREE_USAGE_COOLDOWN_MS };
   }
   if (looksLikeQuotaExhausted(response.body)) {
     return { kind: "quota_exhausted", cooldownMs: QUOTA_EXHAUSTED_COOLDOWN_MS };
