@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useReducer } from "react";
+import { useState, useReducer, useEffect } from "react";
 import Modal from "@/shared/components/Modal";
 import Input from "@/shared/components/Input";
 import Button from "@/shared/components/Button";
@@ -26,6 +26,7 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
     name: "",
     priority: 1,
     apiKey: "",
+    projectId: "",
   });
   const [azureData, setAzureData] = useState({
     azureEndpoint: "",
@@ -46,6 +47,7 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
         name: connection.name || "",
         priority: connection.priority || 1,
         apiKey: "",
+        projectId: connection.projectId || "",
       });
       if (connection.provider === "azure" && connection.providerSpecificData) {
         setAzureData({
@@ -64,6 +66,46 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
       dispatch({ type: "RESET" });
     }
   }
+
+  const [gcpProjects, setGcpProjects] = useState(null);
+  const [loadingProjects, setLoadingProjects] = useState(false);
+  const [projectsError, setProjectsError] = useState("");
+
+  const isGoogle = connection?.provider === "gemini-cli" || connection?.provider === "antigravity";
+
+  useEffect(() => {
+    if (!isOpen || !connection || !isGoogle) {
+      setGcpProjects(null);
+      setProjectsError("");
+      return;
+    }
+
+    let active = true;
+    const loadGcpProjects = async () => {
+      setLoadingProjects(true);
+      setProjectsError("");
+      try {
+        const res = await fetch(`/api/providers/${connection.id}/gcp-projects`);
+        if (!active) return;
+        const data = await res.json();
+        if (res.ok) {
+          setGcpProjects(data.projects || []);
+        } else {
+          setProjectsError(data.error || "Failed to load GCP projects");
+        }
+      } catch (err) {
+        if (!active) return;
+        setProjectsError(err.message || "Failed to load GCP projects");
+      } finally {
+        if (active) setLoadingProjects(false);
+      }
+    };
+
+    loadGcpProjects();
+    return () => {
+      active = false;
+    };
+  }, [isOpen, connection?.id, isGoogle]);
 
   const isOAuth = connection?.authType === "oauth";
   const isAzure = connection?.provider === "azure";
@@ -84,7 +126,13 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
     if (!connection?.provider) return;
     dispatch({ type: "TEST_START" });
     try {
-      const res = await fetch(`/api/providers/${connection.id}/test`, { method: "POST" });
+      const isGoogle = connection.provider === "gemini-cli" || connection.provider === "antigravity";
+      const body = isGoogle ? { projectId: formData.projectId } : undefined;
+      const res = await fetch(`/api/providers/${connection.id}/test`, {
+        method: "POST",
+        headers: body ? { "Content-Type": "application/json" } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+      });
       const data = await res.json();
       dispatch({ type: "TEST_DONE", result: data.valid ? "success" : "failed" });
     } catch {
@@ -122,6 +170,10 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
         name: formData.name,
         priority: formData.priority,
       };
+      if (connection.provider === "gemini-cli" || connection.provider === "antigravity") {
+        updates.projectId = formData.projectId;
+        updates.isProjectIdManual = !!formData.projectId.trim();
+      }
       if (!isOAuth && formData.apiKey) {
         updates.apiKey = formData.apiKey;
         let isValid = validationResult === "success";
@@ -200,6 +252,40 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
           value={formData.priority}
           onChange={(e) => setFormData({ ...formData, priority: Number.parseInt(e.target.value, 10) || 1 })}
         />
+
+        {isGoogle && (
+          <>
+            {loadingProjects ? (
+              <div className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium text-text">Project ID</span>
+                <div className="text-xs text-text-muted animate-pulse py-2">Loading GCP projects...</div>
+              </div>
+            ) : gcpProjects && gcpProjects.length > 0 && !projectsError ? (
+              <Select
+                label="Project ID"
+                value={formData.projectId}
+                onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
+                options={[
+                  { value: "", label: "-- Select GCP Project --" },
+                  ...gcpProjects.map((p) => ({ value: p.id, label: `${p.name} (${p.id})` })),
+                ]}
+                hint="Choose which GCP project ID to use for API requests."
+              />
+            ) : (
+              <Input
+                label="Project ID"
+                value={formData.projectId}
+                onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
+                placeholder="Google GCP Project ID"
+                hint={
+                  projectsError
+                    ? `Failed to load projects (${projectsError}). Please type Project ID manually.`
+                    : "Override the automatically resolved GCP project ID used for API requests."
+                }
+              />
+            )}
+          </>
+        )}
 
         {!isOAuth && (
           <>
@@ -286,7 +372,13 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
         )}
 
         <div className="flex gap-2">
-          <Button onClick={handleSubmit} fullWidth disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
+          <Button
+            onClick={handleSubmit}
+            fullWidth
+            disabled={saving || (isGoogle && formData.projectId !== (connection.projectId || "") && !(gcpProjects && gcpProjects.length > 0 && !projectsError) && testResult !== "success")}
+          >
+            {saving ? "Saving..." : "Save"}
+          </Button>
           <Button onClick={onClose} variant="ghost" fullWidth>Cancel</Button>
         </div>
       </div>

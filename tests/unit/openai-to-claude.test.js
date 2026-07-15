@@ -9,6 +9,8 @@
 import { describe, it, expect } from "vitest";
 import { openaiToClaudeRequest } from "../../open-sse/translator/request/openai-to-claude.js";
 import { openaiToClaudeResponse } from "../../open-sse/translator/response/openai-to-claude.js";
+import { openaiToClaudeNonStreaming } from "../../open-sse/handlers/chatCore/nonStreamingHandler.js";
+import { decloakToolNames } from "../../open-sse/utils/claudeCloaking.js";
 
 describe("openaiToClaudeRequest", () => {
   describe("response_format handling", () => {
@@ -210,5 +212,124 @@ describe("openaiToClaudeResponse", () => {
       offset: 0,
       limit: 120
     });
+  });
+});
+
+describe("openaiToClaudeNonStreaming", () => {
+  it("translates OpenAI text and reasoning content to Claude blocks", () => {
+    const openaiBody = {
+      id: "chatcmpl-123",
+      model: "gpt-4o",
+      choices: [{
+        index: 0,
+        message: {
+          role: "assistant",
+          content: "Hello user",
+          reasoning_content: "Checking parameters first."
+        },
+        finish_reason: "stop"
+      }],
+      usage: {
+        prompt_tokens: 15,
+        completion_tokens: 25,
+        total_tokens: 40,
+        prompt_tokens_details: { cached_tokens: 10 },
+        completion_tokens_details: { reasoning_tokens: 12 }
+      }
+    };
+
+    const result = openaiToClaudeNonStreaming(openaiBody, "claude-3-5-sonnet");
+
+    expect(result.id).toBe("msg_123");
+    expect(result.type).toBe("message");
+    expect(result.role).toBe("assistant");
+    expect(result.model).toBe("claude-3-5-sonnet");
+    expect(result.stop_reason).toBe("end_turn");
+    expect(result.content).toEqual([
+      { type: "thinking", thinking: "Checking parameters first." },
+      { type: "text", text: "Hello user" }
+    ]);
+    expect(result.usage).toEqual({
+      input_tokens: 15,
+      output_tokens: 37, // 25 completion + 12 reasoning
+      cache_read_input_tokens: 10
+    });
+  });
+
+  it("translates OpenAI tool calls to Claude format", () => {
+    const openaiBody = {
+      id: "chatcmpl-456",
+      model: "gpt-4o",
+      choices: [{
+        index: 0,
+        message: {
+          role: "assistant",
+          tool_calls: [{
+            id: "call_abc",
+            type: "function",
+            function: {
+              name: "read_file",
+              arguments: JSON.stringify({ path: "/etc/passwd" })
+            }
+          }]
+        },
+        finish_reason: "tool_calls"
+      }],
+      usage: {
+        prompt_tokens: 20,
+        completion_tokens: 10
+      }
+    };
+
+    const result = openaiToClaudeNonStreaming(openaiBody);
+
+    expect(result.id).toBe("msg_456");
+    expect(result.stop_reason).toBe("tool_use");
+    expect(result.content).toEqual([
+      {
+        type: "tool_use",
+        id: "call_abc",
+        name: "read_file",
+        input: { path: "/etc/passwd" }
+      }
+    ]);
+    expect(result.usage).toEqual({
+      input_tokens: 20,
+      output_tokens: 10
+    });
+  });
+
+  it("restores cloaked tool names when used in combination with decloakToolNames", () => {
+    const openaiBody = {
+      id: "chatcmpl-tool-cloaked",
+      model: "gpt-4o",
+      choices: [{
+        index: 0,
+        message: {
+          role: "assistant",
+          tool_calls: [{
+            id: "call_t1",
+            type: "function",
+            function: {
+              name: "read_file_cc",
+              arguments: "{}"
+            }
+          }]
+        },
+        finish_reason: "tool_calls"
+      }]
+    };
+
+    const toolNameMap = new Map([["read_file_cc", "read_file"]]);
+    const reversed = openaiToClaudeNonStreaming(openaiBody, "claude-3-5-sonnet");
+    const result = decloakToolNames(reversed, toolNameMap);
+
+    expect(result.content[0].name).toBe("read_file");
+  });
+
+  it("handles missing choices gracefully", () => {
+    const emptyBody = { choices: [] };
+    expect(openaiToClaudeNonStreaming(emptyBody)).toEqual(emptyBody);
+    expect(openaiToClaudeNonStreaming(null)).toBeNull();
   });
 });
