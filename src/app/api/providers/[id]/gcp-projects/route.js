@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getProviderConnectionById } from "@/models";
-import { refreshOAuthToken } from "../test/testUtils.js";
+import { GEMINI_CONFIG, ANTIGRAVITY_CONFIG } from "@/lib/oauth/constants/oauth";
+import { refreshGoogleToken, updateProviderCredentials } from "@/sse/services/tokenRefresh";
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy";
 import { proxyAwareFetch } from "open-sse/utils/proxyFetch.js";
 
@@ -20,11 +21,21 @@ export async function GET(request, { params }) {
     // Refresh token if expired
     let accessToken = connection.accessToken;
     const isExpired = connection.expiresAt ? new Date(connection.expiresAt).getTime() < Date.now() : true;
-    
+
     if (isExpired && connection.refreshToken) {
-      const refreshed = await refreshOAuthToken(connection);
+      const config = connection.provider === "gemini-cli" ? GEMINI_CONFIG : ANTIGRAVITY_CONFIG;
+      const refreshed = await refreshGoogleToken(
+        connection.refreshToken,
+        config.clientId,
+        config.clientSecret,
+      );
       if (refreshed?.accessToken) {
         accessToken = refreshed.accessToken;
+        await updateProviderCredentials(connection.id, {
+          accessToken: refreshed.accessToken,
+          refreshToken: refreshed.refreshToken || connection.refreshToken,
+          expiresIn: refreshed.expiresIn,
+        });
       }
     }
 
