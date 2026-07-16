@@ -1,3 +1,18 @@
+# v0.9.3 (2026-07-16)
+
+VansRouter 0.9.3 replaces placeholder logos with official icons, aligns multi-name provider assets, removes redundant defaultModel input for custom compatible endpoints, and syncs upstream omnirouter provider additions.
+
+## Added
+- **Official WebP Icons** — Replaces 17+ empty placeholder assets with official high-quality logos for Databricks, GitLab, Weights & Biases, Bytez, Galadriel, PublicAI, DeepInfra, Venice, SambaNova, Snowflake, Upstage, AI21 Labs, Vercel, Venice, and Volcengine.
+- **Provider Icon Aliasing** — Copies and maps Grok CLI (`grok-cli.webp`) to Grok Web, ClinePass (`clinepass.webp`) to Cline, MiMo Free (`mmf.webp`) to MiMo, and Perplexity Agent (`perplexity-agent.webp`) to Perplexity.
+
+## Fixed
+- **Custom Endpoint API Key Form** — Removes the redundant and confusing `Default Model` field when adding API keys for custom OpenAI/Anthropic compatible endpoints.
+- **Next.js Local Image Cache** — Clears dynamic image optimizer cache to force reload of updated provider icons.
+
+## Changed
+- Root and CLI package versions bumped to **0.9.3**.
+
 # v0.9.1 (2026-07-11)
 
 VansRouter 0.9.1 fixes the `content-blocked` fallback locking loop, aligns `agentrouter` headers dynamically to bypass WAF edge blocks (405), and includes recent fixes for Responses API compatibility, usage tracking, and CI/lint configurations.
