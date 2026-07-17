@@ -118,6 +118,27 @@ export function geminiToOpenAIResponse(chunk, state) {
   const geminiUsage = toOpenAIUsage(usageMeta, "gemini");
   if (geminiUsage) state.usage = geminiUsage;
 
+  // If upstream hid the thought parts but reasoning actually happened
+  // (reasoning_tokens > 0), emit a synthetic reasoning chunk so the UI
+  // signals thinking activity even when the text isn't visible.
+  // Google Cloud Code for Antigravity currently streams final usage but
+  // strips thought parts from the SSE — we surface that gap here.
+  if (
+    candidate.finishReason &&
+    state.usage?.completion_tokens_details?.reasoning_tokens > 0 &&
+    !state._reasoningSurfaced
+  ) {
+    const hiddenTokens = state.usage.completion_tokens_details.reasoning_tokens;
+    results.push(
+      buildChunk(
+        chunkMeta(state),
+        reasoningDelta(`[thinking: ${hiddenTokens} tokens hidden by upstream]`),
+        null,
+      ),
+    );
+    state._reasoningSurfaced = true;
+  }
+
   // Finish reason - include usage in final chunk
   if (candidate.finishReason) {
     let finishReason = toOpenAIFinish(candidate.finishReason, "gemini");

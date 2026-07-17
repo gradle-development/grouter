@@ -1,3 +1,48 @@
+# v0.9.4 (2026-07-17)
+
+Grouter 0.9.4 rolls up post-0.9.1 work: upstream antigravity / OpenAI→Claude / GCP picker, provider icon refresh, Grok CLI reactivation, Docker volume safety, and npm trusted publishing. Keeps grouter identity and custom automation features.
+
+## Added
+- **Upstream sync (post-0.9.1)** — antigravity executor + tool decloaking; `cloudCodeThinking` (OmniRoute parity), model-aware `thinkingConfig` strip, hidden thinking tokens in stream; OpenAI→Claude reverse-translate on `/v1/messages` for non-Claude providers; GCP `projectId` override + API-loaded project dropdown (gemini-cli/antigravity); shared `connectionsPagination` + tests
+- **Standalone / MITM build** — copy entire `src/` into standalone; ESM `package.json` under `src/`; `mitmToolHosts` renamed to `.cjs`
+- **Provider icons** — official WebP logos for many providers; alias maps (Grok CLI→Grok, ClinePass→Cline, MiMo Free→MiMo, Perplexity Agent→Perplexity, muse-spark-web→`muse.webp`)
+- **Sidebar** — “check new changelog” link on update notification
+- **npm trusted publishing** — OIDC publish flow; pin latest npm; `repository` metadata for provenance
+
+## Fixed
+- **Grok CLI reactivation** — more reliable reactivation path for Grok CLI accounts
+- **Docker SQLite volume** — keep volume name `9router-data`; rename creates empty DB with no error
+- **Custom endpoint API key form** — drop redundant `defaultModel` field for OpenAI/Anthropic-compatible custom endpoints
+- **CLI tools assets** — `.webp` icons (404 fix)
+- **gemini-cli** — strip `reasoning_effort`; surface `apiKey` in request details
+- **Provider detail** — pagination restored; select-all + URL page sync + autoclaw icon cache-bust
+- **Version check** — npm package name check uses VansRouter where required for publish/version tooling
+
+## Changed
+- Root and CLI package versions bumped to **0.9.4**.
+
+# v0.9.2 (2026-07-15)
+
+Grouter 0.9.2 syncs upstream VansRouter post-0.9.1 commits (antigravity executor port, OpenAI→Claude reverse-translate, standalone build/MITM fixes, GCP project picker, connection pagination utility). Keeps grouter identity and custom automation features.
+
+## Added
+- **Upstream sync** — merges 20 upstream commits after v0.9.1:
+  - Antigravity executor port + tool decloaking on reversed Claude responses
+  - `cloudCodeThinking` extraction (OmniRoute parity), model-aware thinkingConfig strip, hidden thinking tokens in stream
+  - OpenAI→Claude reverse-translate for all non-Claude providers on `/v1/messages`
+  - GCP projectId override + API-loaded project dropdown for gemini-cli/antigravity
+  - Shared `connectionsPagination` utility + robust pagination tests
+- **Standalone build** — copy entire `src/` into standalone (MITM + instrumentation), ESM `package.json` under `src/`
+- **mitmToolHosts** — rename to `.cjs` to avoid ESM scope errors
+
+## Fixed
+- **CLI tools assets** — use `.webp` icons (404 fix)
+- **gemini-cli** — strip `reasoning_effort`; surface `apiKey` in request details
+- **Provider detail** — pagination restored via shared util; keep select-all + URL page sync + autoclaw icon cache-bust
+
+## Changed
+- Root and CLI package versions bumped to **0.9.2**.
+
 # v0.9.1 (2026-07-11)
 
 VansRouter 0.9.1 fixes the `content-blocked` fallback locking loop, aligns `agentrouter` headers dynamically to bypass WAF edge blocks (405), and includes recent fixes for Responses API compatibility, usage tracking, and CI/lint configurations.

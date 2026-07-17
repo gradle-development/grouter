@@ -18,7 +18,7 @@ function sanitizeFunctionName(name) {
 
 const MAX_RETRY_AFTER_MS = 10000;
 const ANTIGRAVITY_TRANSIENT_RETRY_MAX_MS = 15000;
-const MAX_ANTIGRAVITY_OUTPUT_TOKENS = 64000;
+const MAX_ANTIGRAVITY_OUTPUT_TOKENS = 16384;
 const ANTIGRAVITY_IDE_REQUEST_ID_RE = /^agent\/[^/]+\/\d+\/[^/]+\/\d+$/;
 
 const ANTIGRAVITY_TRANSIENT_ERROR_PATTERNS = [
@@ -46,11 +46,16 @@ const ANTIGRAVITY_REQUEST_BLACKLIST = [
   "reasoning",
   "enable_thinking",
   "thinking_budget",
-  "thinkingConfig",
 ];
 
-// Strip blacklisted fields from an object (used for both body.request and top-level body)
-const stripBlacklisted = obj => {
+// thinkingConfig handling is delegated to the shared cloudCodeThinking module
+// so behavior stays in sync with OmniRoute (selective strip: only for Claude/gpt-oss/tab_).
+import { shouldStripCloudCodeThinking, stripCloudCodeThinkingConfig } from "../services/cloudCodeThinking.js";
+
+// Strip blacklisted fields from an object (used for both body.request and top-level body).
+// thinkingConfig is NOT blacklisted here — model-aware strip is handled by cloudCodeThinking.
+const stripBlacklisted = (obj) => {
+  if (!obj) return;
   for (const key of ANTIGRAVITY_REQUEST_BLACKLIST) delete obj[key];
 };
 
@@ -254,6 +259,10 @@ export class AntigravityExecutor extends BaseExecutor {
       }
     }
     stripBlacklisted(requestWithoutTools);
+    // Model-aware thinkingConfig strip — keep for Gemini, drop for Claude/gpt-oss/tab_.
+    if (shouldStripCloudCodeThinking("antigravity", model)) {
+      stripCloudCodeThinkingConfig(requestWithoutTools);
+    }
     const generationConfig = { ...(requestWithoutTools.generationConfig || {}) };
     if (generationConfig.maxOutputTokens > MAX_ANTIGRAVITY_OUTPUT_TOKENS) {
       generationConfig.maxOutputTokens = MAX_ANTIGRAVITY_OUTPUT_TOKENS;
@@ -271,6 +280,13 @@ export class AntigravityExecutor extends BaseExecutor {
 
     // Strip blacklisted thinking fields from top-level body (set by thinkingUnified.js at root, not body.request)
     stripBlacklisted(body);
+    if (shouldStripCloudCodeThinking("antigravity", model)) {
+      // stripCloudCodeThinkingConfig is safe on non-record bodies (no-op)
+      const stripped = stripCloudCodeThinkingConfig(body);
+      // mutate body in-place keys (the helper returns a new object)
+      for (const k of Object.keys(body)) delete body[k];
+      Object.assign(body, stripped);
+    }
 
     // Strip OpenAI-format fields that leak from passthrough or translation residue.
     // The API only accepts: project, model, userAgent, requestId, requestType, request.

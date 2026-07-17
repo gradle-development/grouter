@@ -23,6 +23,7 @@ import { ZcodeExecutor } from "./zcode.js";
 import { CodeBuddyExecutor } from "./codebuddy-cn.js";
 import { CodeBuddyGlobalExecutor } from "./codebuddy.js";
 import { AgentRouterExecutor } from "./agentrouter.js";
+import { MuseSparkWebExecutor } from "./muse-spark-web.js";
 import { DefaultExecutor } from "./default.js";
 
 const executors = {
@@ -57,6 +58,7 @@ const executors = {
   "codebuddy-cn": new CodeBuddyExecutor(),
   codebuddy: new CodeBuddyGlobalExecutor(),
   agentrouter: new AgentRouterExecutor(),
+  "muse-spark-web": new MuseSparkWebExecutor(),
 };
 
 const defaultCache = new Map();
@@ -98,3 +100,4 @@ export { ZcodeExecutor } from "./zcode.js";
 export { CodeBuddyExecutor } from "./codebuddy-cn.js";
 export { CodeBuddyGlobalExecutor } from "./codebuddy.js";
 export { AgentRouterExecutor } from "./agentrouter.js";
+export { MuseSparkWebExecutor } from "./muse-spark-web.js";

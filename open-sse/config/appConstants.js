@@ -129,6 +129,7 @@ export const AG_DEFAULT_TOOLS = new Set([
 ]);
 
 // Antigravity chat/stream headers
+export const ANTIGRAVITY_PRE_RESPONSE_TIMEOUT_CODE = "PRE_RESPONSE_TIMEOUT";
 export const ANTIGRAVITY_HEADERS = {
   "User-Agent": ANTIGRAVITY_IDE_USER_AGENT
 };

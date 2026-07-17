@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { Card, Button, Badge, Input, Modal, CardSkeleton, OAuthModal, KiroOAuthWrapper, CursorAuthModal, IFlowCookieModal, GitLabAuthModal, Toggle, Select, EditConnectionModal, NoAuthProxyCard, ConfirmModal } from "@/shared/components";
+import { Card, Button, Badge, Input, Modal, CardSkeleton, OAuthModal, KiroOAuthWrapper, CursorAuthModal, IFlowCookieModal, GitLabAuthModal, Toggle, Select, EditConnectionModal, NoAuthProxyCard, ConfirmModal, Pagination } from "@/shared/components";
+import { CONNECTIONS_PER_PAGE, computeConnectionPagination } from "./connectionsPagination";
 import { OAUTH_PROVIDERS, APIKEY_PROVIDERS, FREE_PROVIDERS, FREE_TIER_PROVIDERS, WEB_COOKIE_PROVIDERS, getProviderAlias, isOpenAICompatibleProvider, isAnthropicCompatibleProvider, AI_PROVIDERS, THINKING_CONFIG } from "@/shared/constants/providers";
 import { getModelsByProviderId, getModelKind } from "@/shared/constants/models";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
@@ -20,10 +21,8 @@ import AddApiKeyModal from "./AddApiKeyModal";
 import EditCompatibleNodeModal from "./EditCompatibleNodeModal";
 import AddCustomModelModal from "./AddCustomModelModal";
 import BulkImportCodexModal from "./BulkImportCodexModal";
-import Pagination from "@/shared/components/Pagination";
 
 const ONE_BY_ONE_DELAY_MS = 1000;
-const CONNECTIONS_PER_PAGE = 10;
 
 const AUTO_PING_SETTINGS_KEYS = {
   claude: "claudeAutoPing",
@@ -60,6 +59,7 @@ export default function ProviderDetailPage() {
   const [testingModelIds, setTestingModelIds] = useState(() => new Set());
   const [showAddCustomModel, setShowAddCustomModel] = useState(false);
   const [selectedConnectionIds, setSelectedConnectionIds] = useState([]);
+  const [connectionPage, setConnectionPage] = useState(1);
   const [bulkProxyPoolId, setBulkProxyPoolId] = useState("__none__");
   const [bulkUpdatingProxy, setBulkUpdatingProxy] = useState(false);
   const [providerStrategy, setProviderStrategy] = useState(null);
@@ -78,13 +78,12 @@ export default function ProviderDetailPage() {
   const [oneByOneSummary, setOneByOneSummary] = useState(null);
   const stopOneByOneRef = useRef(false);
   const [importingQoderModels, setImportingQoderModels] = useState(false);
-  const [connectionPage, setConnectionPage] = useState(() => {
-    if (typeof window !== "undefined") {
-      const p = Number(new URLSearchParams(window.location.search).get("connectionPage"));
-      if (p >= 1) return p;
-    }
-    return 1;
-  });
+
+  const [autoclawBalances, setAutoclawBalances] = useState([]);
+  const [refreshingAutoclawBalance, setRefreshingAutoclawBalance] = useState(false);
+  const [autoRefreshingAutoclawIds, setAutoRefreshingAutoclawIds] = useState(() => new Set());
+  const autoRefreshedAutoclawRef = useRef(new Set());
+  const { copied, copy } = useCopyToClipboard();
 
   const syncConnectionPageUrl = useCallback((page) => {
     const params = new URLSearchParams(window.location.search);
@@ -97,11 +96,12 @@ export default function ProviderDetailPage() {
     const newUrl = `${window.location.pathname}${qs ? `?${qs}` : ""}`;
     router.replace(newUrl, { scroll: false });
   }, [router]);
-  const [autoclawBalances, setAutoclawBalances] = useState([]);
-  const [refreshingAutoclawBalance, setRefreshingAutoclawBalance] = useState(false);
-  const [autoRefreshingAutoclawIds, setAutoRefreshingAutoclawIds] = useState(() => new Set());
-  const autoRefreshedAutoclawRef = useRef(new Set());
-  const { copied, copy } = useCopyToClipboard();
+
+  // Hydrate page from ?connectionPage= after mount (SSR-safe; keeps useState(1) for upstream test guard)
+  useEffect(() => {
+    const p = Number(new URLSearchParams(window.location.search).get("connectionPage"));
+    if (p >= 1) setConnectionPage(p);
+  }, []);
 
   const AG_RISK_STORAGE_KEY = "ag_risk_confirmed";
 
@@ -841,15 +841,8 @@ export default function ProviderDetailPage() {
   };
 
   const selectedConnections = connections.filter((conn) => selectedConnectionIds.includes(conn.id));
+  const { currentPage: connectionPageClamped, totalPages: connectionTotalPages, items: pagedConnections, start: pagedStart } = computeConnectionPagination(connections, connectionPage);
   const allSelected = connections.length > 0 && selectedConnectionIds.length === connections.length;
-
-  const connectionTotalPages = Math.max(1, Math.ceil(connections.length / CONNECTIONS_PER_PAGE));
-  const connectionPageClamped = Math.min(Math.max(1, connectionPage), connectionTotalPages);
-  const pagedStart = (connectionPageClamped - 1) * CONNECTIONS_PER_PAGE;
-  const pagedConnections = useMemo(
-    () => connections.slice(pagedStart, pagedStart + CONNECTIONS_PER_PAGE),
-    [connections, pagedStart]
-  );
 
   useEffect(() => {
     const maxPage = Math.max(1, Math.ceil(connections.length / CONNECTIONS_PER_PAGE));

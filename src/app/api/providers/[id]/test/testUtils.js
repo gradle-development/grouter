@@ -197,6 +197,27 @@ async function probeCloudCodeAssistAccess(connection, accessToken, effectiveProx
     ? "google-api-nodejs-client/9.15.1 vscode-antigravity/1.107.0"
     : "google-api-nodejs-client/9.15.1 gemini-cli/0.34.0";
 
+  if (connection.projectId) {
+    const res = await fetchWithConnectionProxy("https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        "User-Agent": userAgent,
+      },
+      body: JSON.stringify({ project: connection.projectId }),
+    }, effectiveProxy);
+
+    if (res.ok) return { valid: true, error: null };
+
+    const bodyText = await res.text().catch(() => "");
+    return {
+      valid: false,
+      error: parseProviderErrorMessage(bodyText, `GCP Project ID test failed with status ${res.status}`),
+      status: res.status,
+    };
+  }
+
   const res = await fetchWithConnectionProxy(CLOUD_CODE_ASSIST_TEST_URL, {
     method: "POST",
     headers: {
@@ -850,9 +871,13 @@ async function testApiKeyConnection(connection, effectiveProxy = null) {
 /**
  * Test a single connection by ID, update DB, and return result.
  */
-export async function testSingleConnection(id) {
-  const connection = await getProviderConnectionById(id);
+export async function testSingleConnection(id, overrides = null) {
+  let connection = await getProviderConnectionById(id);
   if (!connection) return { valid: false, error: "Connection not found", latencyMs: 0, testedAt: new Date().toISOString() };
+
+  if (overrides) {
+    connection = { ...connection, ...overrides };
+  }
 
   const effectiveProxy = await resolveConnectionProxyConfig(connection.providerSpecificData || {});
 

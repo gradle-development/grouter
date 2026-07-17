@@ -320,7 +320,18 @@ export function applyThinking(targetFormat, model, body, provider = null, intent
     stripAll(body);
     return body;
   }
-  if (!cfg) return body;
+  // No explicit thinking intent from client — but reasoning-capable Gemini/Antigravity
+  // models auto-think server-side (tokens still billed in usage). Force includeThoughts:true
+  // on gemini formats so the thought parts stream back to the client instead of being
+  // hidden behind only the reasoning_tokens usage counter.
+  if (!cfg) {
+    const providerFmt = provider ? PROVIDERS[provider]?.thinkingFormat : null;
+    const resolvedFmt = providerFmt || (caps.thinkingFormat) || (fmt);
+    if (resolvedFmt === "gemini-budget" || resolvedFmt === "gemini-level") {
+      setGeminiThinking(body, { thinkingBudget: -1, includeThoughts: true });
+    }
+    return body;
+  }
 
   const fmt = resolveFormat(targetFormat, cleanModel, provider);
   stripAll(body);
