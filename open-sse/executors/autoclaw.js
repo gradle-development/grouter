@@ -20,7 +20,7 @@ function signHeaders(extra = {}) {
     "x-auth-timestamp": ts,
     "x-auth-sign": sign,
     "x-product": "autoclaw",
-    "x-version": "1.11.3",
+    "x-version": "1.12.1",
     "x-tm": "web",
     "x-channel": "official",
     "x-client-type": "web",
