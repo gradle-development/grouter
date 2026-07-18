@@ -23,7 +23,7 @@ export default {
       "user-agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
       "x-product": "autoclaw",
-      "x-version": "1.10.0",
+      "x-version": "1.12.1",
       "x-tm": "web",
       "x-channel": "official",
       "x-client-type": "web",
