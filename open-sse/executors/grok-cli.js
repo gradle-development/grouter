@@ -308,7 +308,8 @@ export class GrokCliExecutor extends BaseExecutor {
     // Turn index after input is finalized (user-message count, monotonic per session)
     this._currentTurnIdx = resolveGrokCliTurnIdx(this._currentSessionId, body.input);
 
-    body.stream = true;
+    // 9router: image tool requests collect one non-streaming Responses payload.
+    body.stream = stream !== false;
     body.store = false;
 
     // Resolve upstream model id (strip effort suffix virtual models)
