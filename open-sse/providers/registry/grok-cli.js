@@ -26,6 +26,7 @@ export default {
     },
   },
   category: "oauth",
+  serviceKinds: ["llm", "image"],
   authModes: ["oauth"],
   hasOAuth: true,
   thinkingConfig: {
@@ -67,6 +68,7 @@ export default {
     { id: "grok-4.5-high", name: "Grok 4.5 (High)", upstreamModelId: "grok-4.5" },
     { id: "grok-4.5-medium", name: "Grok 4.5 (Medium)", upstreamModelId: "grok-4.5" },
     { id: "grok-4.5-low", name: "Grok 4.5 (Low)", upstreamModelId: "grok-4.5" },
+    { id: "grok-4.5-image", name: "Grok 4.5 Image", upstreamModelId: "grok-4.5", kind: "image", params: ["n", "size", "quality"] },
   ],
   features: {
     usage: true,
