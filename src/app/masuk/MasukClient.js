@@ -78,7 +78,7 @@ export default function MasukClient({ initialAuth }) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bg p-4 relative overflow-hidden">
+    <main role="main" className="min-h-screen flex items-center justify-center bg-bg p-4 relative overflow-hidden">
       <div className="landing-grid absolute inset-0 pointer-events-none" aria-hidden="true" />
       <div className="relative z-10 w-full max-w-md">
         <div className="text-center mb-8">
@@ -86,7 +86,7 @@ export default function MasukClient({ initialAuth }) {
             <Image src="/grouter.png" alt="Grouter" width={48} height={48} className="rounded-lg" unoptimized />
           </div>
           <h1 className="text-3xl font-bold text-primary mb-2">Grouter</h1>
-          <p className="text-text-muted">
+          <p className="text-text-muted text-sm">
             {authMode === "oidc" && oidcConfigured
               ? "Masuk dengan OIDC provider untuk mengakses dashboard"
               : "Masukkan password untuk mengakses dashboard"}
@@ -118,7 +118,7 @@ export default function MasukClient({ initialAuth }) {
                 )}
 
                 <div className="flex flex-col gap-2">
-                  <label htmlFor="masuk-password" className="text-sm font-medium">Password</label>
+                  <label htmlFor="masuk-password" className="text-sm font-semibold text-text-main">Password</label>
                   <Input
                     id="masuk-password"
                     type="password"
@@ -166,6 +166,6 @@ export default function MasukClient({ initialAuth }) {
           </div>
         </Card>
       </div>
-    </div>
+    </main>
   );
 }
